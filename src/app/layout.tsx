@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Poppins, Geist_Mono } from 'next/font/google';
 import { StagewiseToolbar } from '@stagewise/toolbar-next';
 import { ReactPlugin } from '@stagewise-plugins/react';
+import { ThemeProvider } from '@/lib/theme-context';
 import './globals.css';
 
 const poppins = Poppins({
@@ -34,7 +35,9 @@ export default function RootLayout({
             plugins: [ReactPlugin],
           }}
         />
-        {children}
+        <ThemeProvider>
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );
