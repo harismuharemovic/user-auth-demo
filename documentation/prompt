@@ -1,0 +1,331 @@
+End-to-End Testing Plan for User Authentication and Order Management System
+Introduction
+USe MCP playwright to execute this task
+This comprehensive testing plan is designed for a User Authentication and Order Management System built with Next.js. The plan covers the complete user journey from registration through order creation and management. The tests are structured to use Playwright for browser automation and should be executed sequentially to ensure proper data flow and dependencies.
+Setup Requirements
+Application URL: http://localhost:3000
+Browser: Chromium (default)
+Test Data: Dynamic test user emails with timestamp to avoid conflicts
+Dependencies: Application server must be running before test execution
+Cleanup: Each test suite should handle its own cleanup where necessary
+<test_suite>
+<suite_name>User Registration Flow</suite_name>
+<description>Tests the complete user registration process including form validation, successful account creation, and UI feedback</description>
+<test_case>
+<name>Successful User Registration</name>
+<steps>
+Navigate to http://localhost:3000/auth
+Verify the authentication page loads with login/register tabs
+Click on the "Register" tab to switch to registration form
+Fill in the registration form with valid test data:
+Email: test-user-${Date.now()}@example.com (dynamic timestamp)
+Password: testpass123
+Confirm Password: testpass123
+Address: 123 Test Street
+Phone: +1 (555) 123-4567
+Click the "Register" button
+Wait for the registration process to complete
+</steps>
+<assertions>
+Registration page loads successfully with both login and register tabs visible
+Register tab can be selected and form fields are accessible
+All form fields accept the provided test data
+Success message "Account created successfully! You can now login." appears
+Registration form is reset/cleared after successful submission
+No error messages are displayed during successful registration
+</assertions>
+</test_case>
+<test_case>
+<name>Registration Form Validation</name>
+<steps>
+Navigate to http://localhost:3000/auth
+Click on the "Register" tab
+Attempt to submit the form with empty fields
+Fill in invalid email format (e.g., "invalid-email")
+Attempt to submit with mismatched passwords
+Test with password less than 6 characters
+Test with invalid phone number format
+</steps>
+<assertions>
+Appropriate validation error messages appear for empty required fields
+"Invalid email format" error appears for malformed email addresses
+"Passwords do not match" error appears when passwords don't match
+"Password must be at least 6 characters long" error appears for short passwords
+"Invalid phone format" error appears for malformed phone numbers
+Form submission is prevented when validation fails
+</assertions>
+</test_case>
+</test_suite>
+<test_suite>
+<suite_name>User Authentication Flow</suite_name>
+<description>Tests user login functionality, session management, and dashboard access</description>
+<test_case>
+<name>Successful User Login</name>
+<steps>
+Ensure user registration has been completed (prerequisite)
+Navigate to http://localhost:3000/auth (if not already there)
+Ensure "Login" tab is selected (default state)
+Fill in the login form with the same credentials used in registration:
+Email: test-user-${Date.now()}@example.com
+Password: testpass123
+Click the "Login" button
+Wait for authentication to complete
+Verify redirect to dashboard page
+</steps>
+<assertions>
+Login form accepts the test credentials
+No error messages appear during successful login
+User is redirected to /dashboard URL
+Dashboard page loads successfully showing authenticated content
+Session is established (user remains logged in on page refresh)
+</assertions>
+</test_case>
+<test_case>
+<name>Login Form Validation and Error Handling</name>
+<steps>
+Navigate to http://localhost:3000/auth
+Attempt to login with empty fields
+Attempt to login with invalid email format
+Attempt to login with incorrect credentials
+Test network error scenarios if possible
+</steps>
+<assertions>
+"Email is required" error appears when email field is empty
+"Password is required" error appears when password field is empty
+"Invalid email format" error appears for malformed email
+"Invalid email or password" error appears for incorrect credentials
+Appropriate error handling for network issues
+</assertions>
+</test_case>
+</test_suite>
+<test_suite>
+<suite_name>Dashboard Access and Route Protection</suite_name>
+<description>Tests protected route functionality and dashboard features</description>
+<test_case>
+<name>Dashboard Access for Authenticated Users</name>
+<steps>
+Ensure user is logged in (prerequisite from previous test)
+Verify dashboard page displays correctly
+Check for presence of main dashboard elements:
+Navigation menu
+Orders table
+"Create New Order" button
+Statistics/summary sections
+Verify user can interact with dashboard elements
+</steps>
+<assertions>
+Dashboard page loads without errors
+All main UI components are visible and properly rendered
+"Create New Order" button is clickable and accessible
+Orders table is present (may be empty initially)
+Navigation elements are functional
+</assertions>
+</test_case>
+<test_case>
+<name>Route Protection for Unauthenticated Users</name>
+<steps>
+Ensure user is logged out (or use new browser session)
+Attempt to directly navigate to http://localhost:3000/dashboard
+Verify redirect behavior
+</steps>
+<assertions>
+Unauthenticated users cannot access /dashboard directly
+Users are redirected to /auth page when attempting to access protected routes
+Appropriate authentication flow is enforced
+</assertions>
+</test_case>
+</test_suite>
+<test_suite>
+<suite_name>Order Creation and Management</suite_name>
+<description>Tests the complete order creation process including form handling, data validation, and UI updates</description>
+<test_case>
+<name>Create New Order Successfully</name>
+<steps>
+Ensure user is logged in and on dashboard page
+Click the "Create New Order" button to open the order creation modal
+Fill in the order form with test data:
+Customer: Select "Liam Johnson" from dropdown
+Verify Customer Email auto-populates to "liam@example.com"
+Customer Phone: +1 (555) 999-8888
+Order Items section:
+Select product "Glimmer Lamps" from dropdown
+Set quantity to 2
+Verify price auto-populates to $125.00 each
+Shipping Address:
+Street: 456 Order Street
+City: Test City
+State: CA
+ZIP: 12345
+Leave "Same as billing" checkbox checked
+Submit the order form
+Wait for order creation to complete
+</steps>
+<assertions>
+Order creation modal opens successfully
+Customer dropdown contains expected options including "Liam Johnson"
+Customer email auto-populates correctly when customer is selected
+Product dropdown contains "Glimmer Lamps" option
+Price auto-populates correctly ($125.00) when product is selected
+Quantity field accepts numeric input and updates calculations
+All address fields accept the provided data
+"Same as billing" checkbox is checked by default
+Order submits successfully without errors
+Success confirmation message or indicator appears
+Modal closes after successful submission
+</assertions>
+</test_case>
+<test_case>
+<name>Order Appears in Main Table</name>
+<steps>
+After successful order creation (prerequisite)
+Verify the orders table in the main dashboard area
+Look for the newly created order in the table
+Check order details in the table row
+</steps>
+<assertions>
+New order appears in the main orders table
+Order row displays correct customer name "Liam Johnson"
+Order status shows as "fulfilled" or appropriate status
+Total amount displays correctly ($250.00 for 2x $125.00 items)
+Order timestamp/date information is present and accurate
+All order data in table matches the submitted form data
+</assertions>
+</test_case>
+<test_case>
+<name>Order Details in Sidebar</name>
+<steps>
+After order creation and verification in main table
+Check the right panel/sidebar "Orders" section
+Verify the new order appears in recent orders
+Click on or select the order to view detailed information
+</steps>
+<assertions>
+New order appears in the right panel "Orders" section
+Order details are accessible and display correctly
+Order items show with correct quantities and prices (2x Glimmer Lamps)
+Shipping address information displays correctly:
+Street: 456 Order Street
+City: Test City
+State: CA
+ZIP: 12345
+Billing information shows correctly (same as shipping)
+Customer information displays:
+Name: Liam Johnson
+Email: liam@example.com
+Phone: +1 (555) 999-8888
+Payment/total information is accurate
+</assertions>
+</test_case>
+<test_case>
+<name>Order Form Validation</name>
+<steps>
+Open the "Create New Order" modal
+Attempt to submit with empty required fields
+Test with invalid data formats where applicable
+Test quantity limits and calculations
+Test address field validation
+</steps>
+<assertions>
+Form prevents submission when required fields are empty
+Appropriate error messages appear for missing data
+Quantity field only accepts positive numbers
+Price calculations update correctly when quantities change
+Address fields validate properly
+Form maintains data integrity during validation failures
+</assertions>
+</test_case>
+</test_suite>
+<test_suite>
+<suite_name>Data Persistence and UI State Management</suite_name>
+<description>Tests data persistence across page refreshes and proper UI state management</description>
+<test_case>
+<name>Data Persistence After Page Refresh</name>
+<steps>
+After creating orders and verifying they appear in the UI
+Refresh the dashboard page (F5 or browser refresh)
+Verify all data persists correctly
+Check that user session is maintained
+</steps>
+<assertions>
+User remains logged in after page refresh
+All created orders remain visible in the orders table
+Order details are preserved and accessible
+UI state is restored properly
+No data loss occurs during page refresh
+</assertions>
+</test_case>
+<test_case>
+<name>Order Calculations and Totals</name>
+<steps>
+Create an order and make sure you first get the html data and then click and fill the form. Make sure that for select element to click on the dropdown and after it's open immediately press the first option.
+Verify all calculations are performed correctly
+Test edge cases like quantity of 0 or very large numbers
+Verify total amounts in different UI locations match
+</steps>
+<assertions>
+Individual item totals calculate correctly (quantity × price)
+Order total sums all item totals accurately
+Calculations update in real-time as quantities change
+All displayed totals across the UI are consistent
+Currency formatting is applied correctly
+Edge cases are handled appropriately
+</assertions>
+</test_case>
+</test_suite>
+<test_suite>
+<suite_name>User Session and Logout</suite_name>
+<description>Tests session management and logout functionality</description>
+<test_case>
+<name>User Logout Process</name>
+<steps>
+Ensure user is logged in and on dashboard
+Locate and click the logout button/option
+Verify logout process completes
+Attempt to access dashboard after logout
+</steps>
+<assertions>
+Logout button/option is accessible from dashboard
+Logout process completes without errors
+User is redirected to authentication page after logout
+Session is properly destroyed
+Attempting to access /dashboard after logout redirects to /auth
+User must re-authenticate to access protected content
+</assertions>
+</test_case>
+</test_suite>
+Test Coverage Summary
+This testing plan provides comprehensive coverage of:
+User Registration: Form validation, successful account creation, error handling
+User Authentication: Login process, credential validation, session establishment
+Route Protection: Access control for protected pages
+Dashboard Functionality: UI rendering, component interaction
+Order Management: Creation, validation, display, and data persistence
+Data Integrity: Calculations, persistence, state management
+Session Management: Login state maintenance and logout process
+Additional Considerations for QA Engineers
+Technical Implementation Notes:
+Use specific element IDs and data attributes for reliable element selection
+Implement proper wait strategies for async operations (API calls, page loads)
+Validate both visual elements and underlying data consistency
+Test error scenarios and edge cases thoroughly
+Ensure sequential execution with proper cleanup between tests
+Key Selectors Reference:
+Registration form: #register-email, #register-password, etc.
+Login form: #login-email, #login-password
+Create Order modal trigger button
+Product and customer dropdown selectors
+Address input fields with appropriate IDs
+Order table rows and cells for data verification
+Execution Strategy:
+Tests should be run in sequence due to data dependencies
+Use dynamic test data (timestamps) to avoid conflicts
+Implement proper cleanup procedures
+Capture screenshots at key verification points
+Log detailed information for debugging failed tests
+Success Criteria:
+All test cases pass consistently
+No data corruption or loss during normal operations
+Proper error handling and user feedback
+Responsive UI updates after all operations
+Secure session management throughout user journey
+</test_plan>
