@@ -1,26 +1,10 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-<<<<<<< HEAD
-import { useRouter } from 'next/navigation';
-
-export default function DashboardPage() {
-  const router = useRouter();
-
-  const handleLogout = async () => {
-    await fetch('/api/auth/logout');
-    router.push('/auth');
-  };
-
-  return (
-    <div className="flex flex-col items-center justify-center h-screen">
-      <h1 className="text-4xl mb-4">Welcome to your Dashboard</h1>
-      <Button onClick={handleLogout}>Logout</Button>
-=======
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { CodeGeneratorDemo } from '@/components/ui/code-generator-demo';
+
 import {
   Dialog,
   DialogContent,
@@ -1093,7 +1077,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
->>>>>>> 9536c36 (merge)
     </div>
   );
 }

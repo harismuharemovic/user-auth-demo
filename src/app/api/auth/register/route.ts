@@ -5,22 +5,15 @@ import bcrypt from 'bcrypt';
 interface RegisterRequestBody {
   email: string;
   password: string;
-<<<<<<< HEAD
-=======
   address?: string;
   phone?: string;
->>>>>>> 9536c36 (merge)
 }
 
 export async function POST(request: NextRequest) {
   try {
     // Parse the JSON request body
     const body: RegisterRequestBody = await request.json();
-<<<<<<< HEAD
-    const { email, password } = body;
-=======
     const { email, password, address, phone } = body;
->>>>>>> 9536c36 (merge)
 
     // Validate required fields
     if (!email || !password) {
@@ -47,8 +40,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-<<<<<<< HEAD
-=======
     // Validate phone format if provided
     if (phone && phone.trim()) {
       const phoneRegex = /^\+?[\d\s\-\(\)]+$/;
@@ -60,7 +51,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
->>>>>>> 9536c36 (merge)
     // Hash the password
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
@@ -68,22 +58,6 @@ export async function POST(request: NextRequest) {
     // Insert user into database (wrapped in Promise for async/await)
     const result = await new Promise<{ success: boolean; error?: string }>(
       resolve => {
-<<<<<<< HEAD
-        const query =
-          'INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, CURRENT_TIMESTAMP)';
-        db.run(query, [email, hashedPassword], function (err) {
-          if (err) {
-            if (err.message.includes('UNIQUE constraint failed')) {
-              resolve({ success: false, error: 'Email already in use' });
-            } else {
-              console.error('Database error:', err);
-              resolve({ success: false, error: 'Internal Server Error' });
-            }
-          } else {
-            resolve({ success: true });
-          }
-        });
-=======
         const query = `
           INSERT INTO users (email, password_hash, address, phone, created_at) 
           VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
@@ -105,7 +79,6 @@ export async function POST(request: NextRequest) {
             }
           }
         );
->>>>>>> 9536c36 (merge)
       }
     );
 

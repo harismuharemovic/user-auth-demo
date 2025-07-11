@@ -33,8 +33,6 @@ function initializeDatabase() {
       }
     }
   );
-<<<<<<< HEAD
-=======
 
   // Initialize orders tables
   initializeOrdersTables();
@@ -116,7 +114,6 @@ function createOrdersTables() {
       });
     }
   });
->>>>>>> 9536c36 (merge)
 }
 
 function createUsersTable() {
@@ -125,11 +122,8 @@ function createUsersTable() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
-<<<<<<< HEAD
-=======
       address TEXT,
       phone TEXT,
->>>>>>> 9536c36 (merge)
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `;
@@ -170,8 +164,6 @@ function migrateUsersTable() {
       needsMigration = true;
     }
 
-<<<<<<< HEAD
-=======
     // Check if address column exists
     if (!columnNames.includes('address')) {
       migrations.push(() => addAddressColumn());
@@ -184,7 +176,6 @@ function migrateUsersTable() {
       needsMigration = true;
     }
 
->>>>>>> 9536c36 (merge)
     if (needsMigration) {
       console.log('Database schema migration needed. Applying migrations...');
       runMigrations(migrations);
@@ -252,8 +243,6 @@ function addCreatedAtColumn(): Promise<void> {
   });
 }
 
-<<<<<<< HEAD
-=======
 function addAddressColumn(): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     const addColumnSQL = `
@@ -292,7 +281,6 @@ function addPhoneColumn(): Promise<void> {
   });
 }
 
->>>>>>> 9536c36 (merge)
 function renamePasswordColumn(): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     const renameColumnSQL = `
