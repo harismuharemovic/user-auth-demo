@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { CheckCircle, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -223,13 +224,23 @@ export default function AuthPage() {
                 </div>
                 {loginMessage && (
                   <div
-                    className={`text-sm ${
+                    className={`text-sm flex items-center gap-2 ${
                       loginMessage.includes('success')
-                        ? 'text-green-600'
-                        : 'text-red-600'
+                        ? 'text-green-600 dark:text-green-400'
+                        : 'text-red-600 dark:text-red-400'
                     }`}
+                    role="alert"
+                    aria-live="polite"
                   >
-                    {loginMessage}
+                    {loginMessage.includes('success') ? (
+                      <CheckCircle className="h-4 w-4" aria-hidden="true" />
+                    ) : (
+                      <XCircle className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    <span>
+                      {loginMessage.includes('success') ? 'Success: ' : 'Error: '}
+                      {loginMessage}
+                    </span>
                   </div>
                 )}
               </CardContent>
@@ -321,13 +332,23 @@ export default function AuthPage() {
                 </div>
                 {registerMessage && (
                   <div
-                    className={`text-sm ${
+                    className={`text-sm flex items-center gap-2 ${
                       registerMessage.includes('success')
-                        ? 'text-green-600'
-                        : 'text-red-600'
+                        ? 'text-green-600 dark:text-green-400'
+                        : 'text-red-600 dark:text-red-400'
                     }`}
+                    role="alert"
+                    aria-live="polite"
                   >
-                    {registerMessage}
+                    {registerMessage.includes('success') ? (
+                      <CheckCircle className="h-4 w-4" aria-hidden="true" />
+                    ) : (
+                      <XCircle className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    <span>
+                      {registerMessage.includes('success') ? 'Success: ' : 'Error: '}
+                      {registerMessage}
+                    </span>
                   </div>
                 )}
               </CardContent>
