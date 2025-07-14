@@ -66,11 +66,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setTheme,
   };
 
-  // Prevent hydration mismatch by not rendering theme-dependent content until mounted
-  if (!mounted) {
-    return <React.Fragment>{children}</React.Fragment>;
-  }
-
+  // Always provide the context, even when not mounted
   return (
     <ThemeContext.Provider value={contextValue}>
       {children}
