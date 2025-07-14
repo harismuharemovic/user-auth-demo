@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 
 import {
   Dialog,
@@ -354,9 +355,9 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
       {/* Sidebar */}
-      <div className="w-16 bg-white border-r border-gray-200 flex flex-col items-center py-4">
+      <div className="w-16 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col items-center py-4">
         <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center mb-8">
           <BarChart3 className="w-5 h-5 text-white" />
         </div>
@@ -390,14 +391,14 @@ export default function DashboardPage() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
-        <header className="bg-white border-b border-gray-200 px-6 py-4">
+        <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
           <div className="flex items-center justify-between">
-            <nav className="flex items-center space-x-2 text-sm text-gray-600">
+            <nav className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-300">
               <span>Dashboard</span>
               <span>›</span>
               <span>Orders</span>
               <span>›</span>
-              <span className="text-gray-900">Recent Orders</span>
+              <span className="text-gray-900 dark:text-gray-100">Recent Orders</span>
             </nav>
 
             <div className="flex items-center space-x-4">
@@ -405,7 +406,8 @@ export default function DashboardPage() {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <Input placeholder="Search..." className="pl-10 w-64" />
               </div>
-              <button className="p-2 text-gray-600 hover:text-gray-900">
+              <ThemeToggle />
+              <button className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100">
                 <Settings className="w-5 h-5" />
               </button>
             </div>
@@ -418,10 +420,10 @@ export default function DashboardPage() {
           <div className="flex-1 p-6">
             {/* Your Orders Header */}
             <div className="mb-6">
-              <h1 className="text-2xl font-semibold text-gray-900 mb-2">
+              <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 Your Orders
               </h1>
-              <p className="text-sm text-gray-600 mb-4">
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
                 Introducing Our Dynamic Orders Dashboard for
                 <br />
                 Seamless Management and Insightful Analysis.
@@ -914,15 +916,15 @@ export default function DashboardPage() {
           </div>
 
           {/* Right Section - Order Details */}
-          <div className="w-96 bg-white border-l border-gray-200 p-6">
+          <div className="w-96 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 p-6">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold text-gray-900">Orders</h2>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Orders</h2>
               <button className="text-sm text-blue-600 hover:text-blue-700">
                 Track Order
               </button>
             </div>
 
-            <p className="text-sm text-gray-600 mb-6">
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
               Recent orders from your online store
             </p>
 
