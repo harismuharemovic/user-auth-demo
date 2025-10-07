@@ -11,6 +11,11 @@
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
     "test:debug": "playwright test --debug",
+    "test:single": "playwright test",
+    "test:single:playwright": "playwright test --reporter=json",
+    "test:single:vitest": "vitest run --reporter=json",
+    "test:staging": "playwright test tests/staging/",
+    "test:review": "playwright test tests/to-be-reviewed-tests/",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"
   },

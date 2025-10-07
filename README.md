@@ -1,4 +1,40 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# User Authentication Demo
+
+This is a [Next.js](https://nextjs.org) project with comprehensive authentication and an **AI-powered test generation system** designed for aviation industry compliance.
+
+## 🤖 NEW: AI Test Generation System
+
+This project now includes a complete AI test generation workflow where AI can **only generate tests, never application code**.
+
+### Quick Links
+- 📖 **[User Guide](tests/AI_TEST_WORKFLOW.md)** - How to generate tests with AI
+- ✅ **[Review Checklist](tests/REVIEW_CHECKLIST.md)** - Guidelines for reviewing AI tests
+- 🚀 **[Setup Guide](SETUP_GUIDE.md)** - Complete setup instructions
+- 📋 **[Quick Reference](README_AI_TEST_WORKFLOW.md)** - One-page overview
+- 📊 **[Implementation Summary](IMPLEMENTATION_SUMMARY.md)** - Technical details
+
+### Generate Your First Test
+
+```
+@claude start test workflow
+
+File: src/lib/your-file.ts
+Method: yourMethodName
+Framework: Vitest
+Test Type: Unit test
+
+[paste method code here]
+```
+
+**Result:** Automated test generation → execution → PR creation in 5-10 minutes
+
+### Safety & Compliance
+- ✅ **Path guards** prevent AI from modifying application code
+- ✅ **Human review** required for all generated tests
+- ✅ **Complete audit trail** for compliance
+- ✅ **Test gating** ensures quality
+
+---
 
 ## Getting Started
 

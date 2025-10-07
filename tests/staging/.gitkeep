@@ -1,0 +1,14 @@
+# Staging Directory for AI-Generated Tests
+
+This directory temporarily holds AI-generated tests during validation.
+
+## Purpose
+- Tests are created here by Claude Code Agent
+- Tests are executed for validation
+- Successful tests are moved to `to-be-reviewed-tests/`
+- Failed tests are deleted (logs preserved)
+
+## Do Not Commit
+This directory should remain empty in version control.
+Test files here are transient and managed by automation.
+

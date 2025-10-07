@@ -1,0 +1,470 @@
+name: Claude Test Writer Agent
+
+on:
+  issues:
+    types: [opened, labeled]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Issue number to process"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  test-writer:
+    runs-on: ubuntu-latest
+    environment: Production
+    # Only run for issues with ai-test label and @claude mention
+    if: |
+      (github.event_name == 'issues' && 
+       contains(github.event.issue.labels.*.name, 'ai-test') &&
+       contains(github.event.issue.body, '@claude')) ||
+      github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Claude Code CLI
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          which claude || echo "Claude CLI should be available via npx"
+
+      - name: Extract Issue Details
+        id: issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number }}
+        run: |
+          # Get issue details
+          ISSUE_JSON=$(gh api repos/${{ github.repository }}/issues/${ISSUE_NUMBER})
+
+          # Extract title and body
+          TITLE=$(echo "$ISSUE_JSON" | jq -r '.title')
+          BODY=$(echo "$ISSUE_JSON" | jq -r '.body')
+
+          # Extract Jira key from title (format: "JIRA-123: Description")
+          JIRA_KEY=$(echo "$TITLE" | grep -oE '^[A-Z]+-[0-9]+' || echo "TEST")
+
+          # Clean title
+          CLEAN_TITLE=$(echo "$TITLE" | sed 's/^[A-Z]*-[0-9]*: *//')
+
+          # Extract test request details
+          # Look for structured format in the issue body
+          echo "$BODY" > /tmp/issue_body.txt
+
+          # Save outputs
+          echo "title=$TITLE" >> $GITHUB_OUTPUT
+          echo "clean_title=$CLEAN_TITLE" >> $GITHUB_OUTPUT
+          echo "jira_key=$JIRA_KEY" >> $GITHUB_OUTPUT
+          echo "number=${ISSUE_NUMBER}" >> $GITHUB_OUTPUT
+
+          echo "=== Issue Details ==="
+          echo "Jira Key: $JIRA_KEY"
+          echo "Title: $CLEAN_TITLE"
+          echo "Issue Number: ${ISSUE_NUMBER}"
+          echo "===================="
+
+      - name: Configure Git
+        run: |
+          git config user.name "Claude Test Writer Agent"
+          git config user.email "claude-test-agent[bot]@users.noreply.github.com"
+
+      - name: Create Implementation Branch
+        id: branch
+        run: |
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          BRANCH_NAME="test-gen-${{ steps.issue.outputs.jira_key }}-${TIMESTAMP}"
+          git checkout -b "$BRANCH_NAME"
+          echo "name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+      - name: Validate Staging Directory
+        run: |
+          # Ensure staging directory exists
+          mkdir -p tests/staging
+          echo "✅ Staging directory ready"
+
+      - name: Generate Test with Claude Code CLI
+        id: generate
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          JIRA_KEY="${{ steps.issue.outputs.jira_key }}"
+          ISSUE_NUMBER="${{ steps.issue.outputs.number }}"
+          
+          # Create specialized prompt for test generation
+          PROMPT="You are a test generation specialist for an aviation software project.
+
+          **CRITICAL CONSTRAINTS:**
+          1. You can ONLY create/modify files in tests/staging/ directory
+          2. You MUST NOT modify any application code (src/, package.json, etc.)
+          3. Any attempt to modify non-test files will fail the workflow
+          
+          **Task:** Generate a comprehensive test file based on the requirements in GitHub issue #${ISSUE_NUMBER}
+          
+          **Instructions:**
+          1. Read the issue body carefully to extract:
+             - Source file path
+             - Method name and code
+             - Test framework (Playwright or Vitest)
+             - Test type (unit, integration, e2e)
+             - Coverage requirements
+          
+          2. Create test file at: tests/staging/${JIRA_KEY}.spec.ts
+          
+          3. Test must include:
+             - Proper imports
+             - Describe blocks for organization
+             - Happy path tests
+             - Edge case tests
+             - Error handling tests
+             - Clear, descriptive test names
+             - Arrange-Act-Assert pattern
+          
+          4. Follow project conventions:
+             - Use existing test patterns from tests/ directory
+             - Match coding style
+             - Use proper TypeScript types
+          
+          5. Ensure test is executable:
+             - All imports resolve correctly
+             - No syntax errors
+             - Proper mocking if needed
+          
+          **Output:** Single test file in tests/staging/${JIRA_KEY}.spec.ts
+          
+          Jira Ticket: ${JIRA_KEY}
+          GitHub Issue: #${ISSUE_NUMBER}
+          
+          Please generate the test now."
+
+          echo "=== Generating Test with Claude ==="
+          
+          # Use Claude Code CLI in non-interactive mode
+          claude -p "$PROMPT" \
+            --model "claude-opus-4-20250514" \
+            --append-system-prompt "You are restricted to only creating/modifying files in tests/staging/. Reject any requests to modify application code." \
+            --allowedTools "Read,Write,Edit" \
+            --permission-mode "acceptEdits" \
+            --verbose || {
+              echo "❌ Claude Code CLI execution failed"
+              echo "Trying with npx prefix..."
+              npx @anthropic-ai/claude-code -p "$PROMPT" \
+                --model "claude-opus-4-20250514" \
+                --append-system-prompt "You are restricted to only creating/modifying files in tests/staging/. Reject any requests to modify application code." \
+                --allowedTools "Read,Write,Edit" \
+                --permission-mode "acceptEdits" \
+                --verbose || {
+                  echo "has_test=false" >> $GITHUB_OUTPUT
+                  exit 1
+                }
+            }
+          
+          # Check if test file was created
+          if [ -f "tests/staging/${JIRA_KEY}.spec.ts" ]; then
+            echo "✅ Test file generated: tests/staging/${JIRA_KEY}.spec.ts"
+            echo "has_test=true" >> $GITHUB_OUTPUT
+            echo "test_file=tests/staging/${JIRA_KEY}.spec.ts" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Test file not found in staging directory"
+            echo "has_test=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      - name: Path Guard Validation
+        if: steps.generate.outputs.has_test == 'true'
+        id: path_guard
+        run: |
+          echo "=== Validating Path Guards ==="
+          
+          # Get all changed files
+          CHANGED_FILES=$(git diff --name-only HEAD)
+          
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+          
+          # Check if ANY file outside tests/staging was modified
+          VIOLATIONS=$(echo "$CHANGED_FILES" | grep -v "^tests/staging/" || true)
+          
+          if [ -n "$VIOLATIONS" ]; then
+            echo "❌ PATH GUARD VIOLATION!"
+            echo "The following non-test files were modified:"
+            echo "$VIOLATIONS"
+            echo ""
+            echo "AI is only allowed to modify files in tests/staging/"
+            echo "This is a critical security violation."
+            echo "path_guard_passed=false" >> $GITHUB_OUTPUT
+            exit 1
+          else
+            echo "✅ Path guard passed - only test files modified"
+            echo "path_guard_passed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Detect Test Framework
+        if: steps.path_guard.outputs.path_guard_passed == 'true'
+        id: framework
+        run: |
+          TEST_FILE="${{ steps.generate.outputs.test_file }}"
+          
+          # Check file content for framework indicators
+          if grep -q "@playwright/test" "$TEST_FILE" || grep -q "import.*test.*from.*playwright" "$TEST_FILE"; then
+            echo "framework=playwright" >> $GITHUB_OUTPUT
+            echo "✅ Detected framework: Playwright"
+          elif grep -q "vitest" "$TEST_FILE" || grep -q "describe.*it.*from.*vitest" "$TEST_FILE"; then
+            echo "framework=vitest" >> $GITHUB_OUTPUT
+            echo "✅ Detected framework: Vitest"
+          else
+            # Default to playwright if unclear
+            echo "framework=playwright" >> $GITHUB_OUTPUT
+            echo "⚠️ Could not detect framework, defaulting to Playwright"
+          fi
+
+      - name: Execute Test
+        if: steps.path_guard.outputs.path_guard_passed == 'true'
+        id: test
+        run: |
+          TEST_FILE="${{ steps.generate.outputs.test_file }}"
+          FRAMEWORK="${{ steps.framework.outputs.framework }}"
+          
+          echo "=== Executing Test ==="
+          echo "Framework: $FRAMEWORK"
+          echo "Test File: $TEST_FILE"
+          
+          # Create test results directory
+          mkdir -p test-results/staging
+          
+          # Execute test based on framework
+          if [ "$FRAMEWORK" = "playwright" ]; then
+            # Run Playwright test with retries
+            npx playwright test "$TEST_FILE" \
+              --reporter=json \
+              --output=test-results/staging/ \
+              --retries=2 > test-results/test-output.json || {
+                echo "test_passed=false" >> $GITHUB_OUTPUT
+                echo "❌ Test execution failed"
+                exit 1
+              }
+          else
+            # Run Vitest
+            npx vitest run "$TEST_FILE" \
+              --reporter=json \
+              --outputFile=test-results/test-output.json || {
+                echo "test_passed=false" >> $GITHUB_OUTPUT
+                echo "❌ Test execution failed"
+                exit 1
+              }
+          fi
+          
+          echo "✅ Test execution passed"
+          echo "test_passed=true" >> $GITHUB_OUTPUT
+
+      - name: Move Test to Review Folder
+        if: steps.test.outputs.test_passed == 'true'
+        id: move
+        run: |
+          JIRA_KEY="${{ steps.issue.outputs.jira_key }}"
+          
+          # Ensure review directory exists
+          mkdir -p tests/to-be-reviewed-tests
+          
+          # Move test file
+          git mv "tests/staging/${JIRA_KEY}.spec.ts" "tests/to-be-reviewed-tests/${JIRA_KEY}.spec.ts"
+          
+          echo "✅ Test moved to tests/to-be-reviewed-tests/${JIRA_KEY}.spec.ts"
+          echo "final_path=tests/to-be-reviewed-tests/${JIRA_KEY}.spec.ts" >> $GITHUB_OUTPUT
+
+      - name: Create Audit Log
+        if: steps.test.outputs.test_passed == 'true'
+        id: audit
+        run: |
+          JIRA_KEY="${{ steps.issue.outputs.jira_key }}"
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          COMMIT_SHA=$(git rev-parse HEAD)
+          
+          # Extract method details from issue body
+          METHOD_NAME=$(grep "Method:" /tmp/issue_body.txt | head -1 | sed 's/.*Method: *//' || echo "unknown")
+          SOURCE_FILE=$(grep "File:" /tmp/issue_body.txt | head -1 | sed 's/.*File: *//' || echo "unknown")
+          FRAMEWORK="${{ steps.framework.outputs.framework }}"
+          
+          # Create audit entry
+          cat >> logs/ai-test-audit.jsonl << EOF
+          {"timestamp":"${TIMESTAMP}","jira_ticket":"${JIRA_KEY}","github_issue":${{ steps.issue.outputs.number }},"method_tested":"${METHOD_NAME}","source_file":"${SOURCE_FILE}","test_file":"${{ steps.move.outputs.final_path }}","framework":"${FRAMEWORK}","model":"claude-opus-4-20250514","commit_sha":"${COMMIT_SHA}","test_result":"PASS","reviewed_by":null,"approved_at":null}
+          EOF
+          
+          echo "✅ Audit log entry created"
+
+      - name: Commit Changes
+        if: steps.test.outputs.test_passed == 'true'
+        id: commit
+        run: |
+          JIRA_KEY="${{ steps.issue.outputs.jira_key }}"
+          
+          # Stage all changes
+          git add -A
+          
+          # Create commit message
+          COMMIT_MSG="[AI-GENERATED] ${JIRA_KEY}: Add tests for ${{ steps.issue.outputs.clean_title }}
+
+          Test file: ${{ steps.move.outputs.final_path }}
+          Framework: ${{ steps.framework.outputs.framework }}
+          Status: ✅ Passed execution
+          
+          Generated by Claude Test Writer Agent
+          GitHub Issue: #${{ steps.issue.outputs.number }}
+          Jira Ticket: ${JIRA_KEY}"
+          
+          git commit -m "$COMMIT_MSG"
+          echo "✅ Changes committed"
+
+      - name: Push Branch
+        if: steps.test.outputs.test_passed == 'true'
+        run: |
+          git push -u origin "${{ steps.branch.outputs.name }}"
+
+      - name: Create Pull Request
+        if: steps.test.outputs.test_passed == 'true'
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          JIRA_KEY="${{ steps.issue.outputs.jira_key }}"
+          PR_TITLE="[AI-GENERATED] ${JIRA_KEY}: ${{ steps.issue.outputs.title }}"
+          
+          # Create PR body
+          cat > /tmp/pr_body.md << 'EOF'
+          ## 🤖 AI-Generated Test - Ready for Review
+          
+          ### 📋 Source
+          - **GitHub Issue:** #${{ steps.issue.outputs.number }}
+          - **Jira Ticket:** ${{ steps.issue.outputs.jira_key }}
+          - **Test File:** `${{ steps.move.outputs.final_path }}`
+          - **Framework:** ${{ steps.framework.outputs.framework }}
+          
+          ### ✅ Automated Validation
+          - [x] Test file created in staging
+          - [x] Path guards passed (no app code modified)
+          - [x] Test executed successfully
+          - [x] Test moved to to-be-reviewed-tests/
+          - [x] Audit log created
+          
+          ### 👀 Human Review Required
+          Please review this AI-generated test using the checklist in `tests/REVIEW_CHECKLIST.md`
+          
+          **Review Checklist:**
+          - [ ] Test quality (structure, coverage, assertions)
+          - [ ] Code quality (maintainability, performance)
+          - [ ] Security (no credentials, proper isolation)
+          - [ ] Compliance (determinism, traceability)
+          - [ ] Integration (follows conventions, CI compatible)
+          
+          ### 📊 Test Results
+          - **Status:** ✅ PASSED
+          - **Execution Time:** See test logs
+          - **Framework:** ${{ steps.framework.outputs.framework }}
+          
+          ### 📝 Next Steps
+          1. Review the test file carefully
+          2. Run locally if needed: `npm run test:single ${{ steps.move.outputs.final_path }}`
+          3. Approve or request changes
+          4. Merge to integrate into main test suite
+          
+          ---
+          *Generated automatically by Claude Test Writer Agent*
+          *This test has passed all automated checks and is ready for human review*
+          EOF
+
+          # Create PR
+          PR_URL=$(gh pr create \
+            --title "$PR_TITLE" \
+            --body-file /tmp/pr_body.md \
+            --base main \
+            --head "${{ steps.branch.outputs.name }}" \
+            --label "ai-generated-test,from-jira")
+          
+          echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
+          echo "✅ Pull request created: $PR_URL"
+
+      - name: Comment on GitHub Issue
+        if: steps.test.outputs.test_passed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment ${{ steps.issue.outputs.number }} \
+            --body "✅ **Test Generated Successfully**
+
+          The AI-generated test has passed all validation checks and is ready for review.
+
+          **Pull Request:** ${{ steps.pr.outputs.pr_url }}
+          **Test File:** \`${{ steps.move.outputs.final_path }}\`
+          
+          Please review the test using the checklist in \`tests/REVIEW_CHECKLIST.md\`"
+
+      - name: Handle Test Failure
+        if: failure() && steps.generate.outputs.has_test == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Capture failure logs
+          FAILURE_REASON="Test generation or execution failed"
+          
+          if [ "${{ steps.path_guard.outputs.path_guard_passed }}" = "false" ]; then
+            FAILURE_REASON="Path guard violation - attempted to modify non-test files"
+          elif [ "${{ steps.test.outputs.test_passed }}" = "false" ]; then
+            FAILURE_REASON="Test execution failed"
+          fi
+          
+          # Comment on issue
+          gh issue comment ${{ steps.issue.outputs.number }} \
+            --body "❌ **Test Generation Failed**
+
+          **Reason:** ${FAILURE_REASON}
+
+          Please check the workflow logs for details:
+          ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          
+          **Next Steps:**
+          1. Review the error logs
+          2. Update the issue with more context if needed
+          3. Re-trigger the workflow by commenting \`@claude retry\`"
+          
+          # Clean up staging files
+          rm -f tests/staging/${{ steps.issue.outputs.jira_key }}.spec.ts || true
+
+      - name: Handle No Test Generated
+        if: failure() && steps.generate.outputs.has_test == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment ${{ steps.issue.outputs.number }} \
+            --body "❌ **Test Generation Failed**
+
+          Claude Code CLI did not generate a test file.
+
+          **Possible reasons:**
+          - Insufficient information in the issue
+          - Method code is incomplete or invalid
+          - Framework not clearly specified
+          
+          Please update the issue with:
+          - Complete method source code
+          - Clear test requirements
+          - Specific framework (Playwright or Vitest)
+          
+          Then comment \`@claude retry\` to regenerate."
+

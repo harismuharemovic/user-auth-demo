@@ -1,0 +1,21 @@
+# AI-Generated Tests Awaiting Review
+
+This directory contains AI-generated tests that have passed automated validation
+and are ready for human review.
+
+## Purpose
+- Tests moved here after successful execution
+- Each test has passed all automated checks
+- Human review required before integration
+- Use `REVIEW_CHECKLIST.md` for review guidelines
+
+## Review Process
+1. Test appears in this folder via PR
+2. Reviewer uses checklist to evaluate
+3. Approved tests are merged into main suite
+4. Test file moves to appropriate location in tests/
+
+## Files Here
+All files in this directory are temporary and awaiting review.
+Once reviewed and approved, they will be moved to the main test suite.
+
