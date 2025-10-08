@@ -417,20 +417,23 @@ jobs:
           TEST_FILE="${{ needs.run-tests-and-validate.outputs.test_file }}"
           
           # Post informational comment (not @claude, just info)
-          cat > /tmp/retry-info.md << EOF
+          cat > /tmp/retry-info.md << 'EOFCOMMENT'
 ### 🔄 Retry Attempt $((ATTEMPT + 1))/3
 
-**Test Validation Failed** - Detailed feedback in \`RETRY_FEEDBACK.md\`
+**Test Validation Failed** - Detailed feedback in `RETRY_FEEDBACK.md`
 
-**Failed Test File:** \`$TEST_FILE\`
+**Failed Test File:** `$TEST_FILE`
 **Remaining Attempts:** $REMAINING
 
 🤖 Automatically triggering Claude to fix the tests...
 
 ---
 
-**Task for Claude:** Update the test assertions in \`$TEST_FILE\` to match the EXACT expected outputs from the I/O specification table in this issue. Review \`RETRY_FEEDBACK.md\` for details on which test cases failed and why.
-EOF
+**Task for Claude:** Update the test assertions in `$TEST_FILE` to match the EXACT expected outputs from the I/O specification table in this issue. Review `RETRY_FEEDBACK.md` for details on which test cases failed and why.
+EOFCOMMENT
+          
+          # Replace variables in the temp file
+          sed -i.bak "s/\$((ATTEMPT + 1))/$((ATTEMPT + 1))/g; s/\$TEST_FILE/$TEST_FILE/g; s/\$REMAINING/$REMAINING/g" /tmp/retry-info.md
           
           gh issue comment "$ISSUE_NUM" --body-file /tmp/retry-info.md
           
@@ -441,17 +444,20 @@ EOF
           sleep 2
           
           # Post @claude mention AFTER label
-          cat > /tmp/claude-trigger.md << EOF
+          cat > /tmp/claude-trigger.md << 'EOFCLAUDE'
 @claude The tests failed validation. Please:
 
-1. Read \`RETRY_FEEDBACK.md\` in the repo root to see which test cases failed
-2. Update \`$TEST_FILE\` to fix the failing assertions
+1. Read `RETRY_FEEDBACK.md` in the repo root to see which test cases failed
+2. Update `$TEST_FILE` to fix the failing assertions
 3. Use the EXACT expected outputs from the I/O table in this issue
-4. Keep normal test pattern: \`const result = fn(...); expect(result).toBe(value);\`
+4. Keep normal test pattern: `const result = fn(...); expect(result).toBe(value);`
 5. Commit your changes
 
 This is retry attempt $((ATTEMPT + 1))/3. You have $REMAINING more attempt(s) after this.
-EOF
+EOFCLAUDE
+          
+          # Replace variables in the temp file
+          sed -i.bak "s/\$TEST_FILE/$TEST_FILE/g; s/\$((ATTEMPT + 1))/$((ATTEMPT + 1))/g; s/\$REMAINING/$REMAINING/g" /tmp/claude-trigger.md
           
           gh issue comment "$ISSUE_NUM" --body-file /tmp/claude-trigger.md
           
