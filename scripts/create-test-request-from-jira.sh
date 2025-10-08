@@ -192,3 +192,11 @@ echo ""
 echo "✅ Claude Code triggered automatically - I/O validation will run after generation"
 echo "   Monitor progress: gh issue view $ISSUE_NUMBER --comments"
 
+# Start background watcher to auto-download approved test artifact when ready
+if [ -x "./scripts/auto-download-approved-test.sh" ]; then
+  echo ""
+  echo "🕒 Starting auto-download watcher for issue #$ISSUE_NUMBER (runs in background)"
+  nohup ./scripts/auto-download-approved-test.sh "$ISSUE_NUMBER" >/tmp/auto-download-$ISSUE_NUMBER.log 2>&1 & disown || true
+  echo "   Logs: /tmp/auto-download-$ISSUE_NUMBER.log"
+fi
+
