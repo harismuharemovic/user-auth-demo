@@ -234,7 +234,7 @@ jobs:
 
       # Retry guidance is generated inline in the comment step below
 
-      - name: Comment with retry guidance
+      - name: Post initial failure comment
         if: steps.check_final.outputs.is_final != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -255,7 +255,7 @@ jobs:
           
           **You have $REMAINING attempt(s) remaining.**
           
-          📝 A RETRY_FEEDBACK.md file with detailed failure information will be committed to trigger automatic retry."
+          📝 Committing RETRY_FEEDBACK.md with detailed failure information..."
 
       - name: Auto-commit feedback to trigger retry
         if: steps.check_final.outputs.is_final != 'true'
@@ -354,7 +354,35 @@ jobs:
           
           git push origin ${{ github.ref_name }}
           
-          echo "✅ Feedback committed - this will trigger Claude to retry"
+          echo "✅ Feedback committed - now triggering Claude to retry"
+
+      - name: Trigger Claude for retry
+        if: steps.check_final.outputs.is_final != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ISSUE_NUM="${{ needs.extract-metadata.outputs.issue_number }}"
+          ATTEMPT="${{ needs.extract-metadata.outputs.attempt_number }}"
+          REMAINING=$((3 - ATTEMPT))
+          
+          # Post comment to trigger Claude
+          gh issue comment "$ISSUE_NUM" --body "@claude 
+
+          🔄 **Auto-Retry Triggered (Attempt $((ATTEMPT + 1))/3)**
+
+          The previous test generation attempt failed validation. A RETRY_FEEDBACK.md file has been committed to the branch with detailed failure information.
+
+          **Please:**
+          1. Read the RETRY_FEEDBACK.md file in the repository root
+          2. Review the specific test cases that failed
+          3. Regenerate the test file with corrected assertions
+          4. Use the EXACT expected outputs from the I/O specification table
+
+          **Important:** The feedback file shows what your tests returned vs. what was expected. Update your assertions to match the expected values exactly.
+          
+          You have $REMAINING attempt(s) remaining after this one."
+          
+          echo "✅ Claude triggered for automatic retry"
 
       - name: Handle final failure
         if: steps.check_final.outputs.is_final == 'true'
