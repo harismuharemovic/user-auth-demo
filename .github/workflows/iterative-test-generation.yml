@@ -402,6 +402,53 @@ jobs:
           
           echo "✅ Feedback committed - now triggering Claude to retry"
 
+      - name: Invoke Claude Code to regenerate tests (non-interactive)
+        if: steps.check_final.outputs.is_final != 'true'
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          mcp_config: |
+            {
+              "mcpServers": {
+                "sequential-thinking": {
+                  "command": "npx",
+                  "args": [
+                    "-y",
+                    "@modelcontextprotocol/server-sequential-thinking"
+                  ]
+                },
+                "playwright": {
+                  "command": "npx",
+                  "args": [
+                    "@playwright/mcp@latest"
+                  ]
+                }
+              }
+            }
+          allowed_tools: "mcp__sequential-thinking__sequentialthinking,mcp__playwright__browser_close,mcp__playwright__browser_resize,mcp__playwright__browser_console_messages,mcp__playwright__browser_handle_dialog,mcp__playwright__browser_file_upload,mcp__playwright__browser_install,mcp__playwright__browser_press_key,mcp__playwright__browser_navigate,mcp__playwright__browser_navigate_back,mcp__playwright__browser_navigate_forward,mcp__playwright__browser_network_requests,mcp__playwright__browser_pdf_save,mcp__playwright__browser_take_screenshot,mcp__playwright__browser_snapshot,mcp__playwright__browser_click,mcp__playwright__browser_drag,mcp__playwright__browser_hover,mcp__playwright__browser_type,mcp__playwright__browser_select_option,mcp__playwright__browser_tab_list,mcp__playwright__browser_tab_new,mcp__playwright__browser_tab_select,mcp__playwright__browser_tab_close,mcp__playwright__browser_generate_playwright_test,mcp__playwright__browser_wait_for"
+          additional_permissions: |
+            actions: read
+          custom_instructions: |
+            ## Test Generation Guidelines (Retry Invocation)
+
+            This run is triggered automatically by the validation workflow after a failed attempt.
+            A RETRY_FEEDBACK.md file is present at the repo root containing exact failures.
+            Read it first and fix only the test assertions using NORMAL testing patterns.
+
+            **CRITICAL: Write NORMAL Tests Only - NO Workarounds**
+            - Always call the actual function under test
+            - Then assert on the returned value: `expect(result).toBe(expected)`
+            - Do NOT use `expect(26).toBe(26)` or similar workarounds
+            - Do NOT use string tricks or other creative logic
+            - It's OK if tests fail — write standard, conventional tests
+
+            **I/O Spec Compliance**
+            - Use the EXACT expected outputs from the I/O table
+            - One describe per TC-XXX: `describe('methodName - TC-XXX', ...)`
+            - Keep test names stable to match validator mapping
+
+            Place tests in the `tests/` directory and push changes to the current branch.
+
       - name: Trigger Claude for retry
         if: steps.check_final.outputs.is_final != 'true'
         env:
