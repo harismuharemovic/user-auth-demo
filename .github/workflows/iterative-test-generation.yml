@@ -35,6 +35,9 @@ jobs:
           if echo "$COMMIT_MSG" | grep -q "^test: retry attempt"; then
             echo "should_skip=true" >> $GITHUB_OUTPUT
             echo "⏭️  Skipping - this is a retry feedback commit (will trigger Claude instead)"
+          elif echo "$COMMIT_MSG" | grep -q "^chore: remove test file"; then
+            echo "should_skip=true" >> $GITHUB_OUTPUT
+            echo "⏭️  Skipping - test file cleanup commit (artifact already uploaded)"
           else
             echo "should_skip=false" >> $GITHUB_OUTPUT
             echo "✅ This is a test generation commit - proceeding with validation"
@@ -164,6 +167,34 @@ jobs:
         with:
           name: approved-test-file
           path: ${{ steps.find_tests.outputs.test_file }}
+
+      - name: Remove test file from branch
+        if: steps.validate.outputs.all_passed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TEST_FILE="${{ steps.find_tests.outputs.test_file }}"
+          
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Remove test file from repo (kept only as artifact)
+          if [ -f "$TEST_FILE" ]; then
+            git rm "$TEST_FILE"
+            git commit -m "chore: remove test file from branch - available as artifact only
+
+            Test file passed validation and has been uploaded as artifact.
+            Download locally using: ./scripts/download-approved-test.sh <issue-number>
+            
+            This prevents test files from being merged into main via PR."
+            
+            git push origin ${{ github.ref_name }}
+            
+            echo "✅ Test file removed from branch (available as artifact only)"
+          else
+            echo "⚠️ Test file not found at $TEST_FILE"
+          fi
 
   handle-success:
     needs: [extract-metadata, run-tests-and-validate]
