@@ -44,68 +44,7 @@ jobs:
           
           echo "Found $ISSUE_COUNT new ai-test tickets"
 
-      - name: Create GitHub Issues from Jira Tickets
-        if: steps.check_jira.outputs.issue_count > 0
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
-          JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
-          JIRA_DOMAIN: ${{ secrets.JIRA_DOMAIN }}
+      - name: Skip bridge (disabled)
         run: |
-          RESPONSE='${{ steps.check_jira.outputs.response }}'
-          
-          # Process each Jira ticket
-          echo "$RESPONSE" | jq -c '.issues[]' | while read -r issue; do
-            JIRA_KEY=$(echo "$issue" | jq -r '.key')
-            SUMMARY=$(echo "$issue" | jq -r '.fields.summary')
-            DESCRIPTION=$(echo "$issue" | jq -r '.fields.description // ""')
-            JIRA_URL="https://$JIRA_DOMAIN/browse/$JIRA_KEY"
-            
-            echo "Processing $JIRA_KEY: $SUMMARY"
-            
-            # Create GitHub issue body
-            ISSUE_BODY="## AI Test Request from Jira
-
-**Jira Ticket:** [$JIRA_KEY]($JIRA_URL)
-
-### Requirements
-
-$DESCRIPTION
-
-### Instructions for Claude Code Agent
-
-@claude Please generate a comprehensive test file for this method according to the requirements above.
-
-**Constraints:**
-- Only create/modify files in \`tests/staging/\`
-- Follow project test patterns
-- Ensure test is executable and passes
-- Use TypeScript with proper types
-
-**Output:** \`tests/staging/${JIRA_KEY}.spec.ts\`
-
----
-*This issue was automatically created from Jira ticket $JIRA_KEY*"
-
-            # Create GitHub issue
-            gh issue create \
-              --title "$JIRA_KEY: $SUMMARY" \
-              --body "$ISSUE_BODY" \
-              --label "ai-test,from-jira" \
-              --repo ${{ github.repository }}
-            
-            # Mark Jira ticket as synced
-            curl -s \
-              -u "$JIRA_EMAIL:$JIRA_TOKEN" \
-              -X PUT \
-              -H "Content-Type: application/json" \
-              "https://$JIRA_DOMAIN/rest/api/3/issue/$JIRA_KEY" \
-              -d '{
-                "update": {
-                  "labels": [{"add": "github-synced"}]
-                }
-              }'
-            
-            echo "✅ Created GitHub issue for $JIRA_KEY and marked as synced"
-          done
+          echo "Bridge is disabled for this repo."
 
