@@ -1,0 +1,134 @@
+name: Create Jira LLTC Ticket
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  issues: write
+
+jobs:
+  create-jira-ticket:
+    runs-on: ubuntu-latest
+    if: github.event.label.name == 'test-request'
+    
+    steps:
+      - name: Extract Test Request Details
+        id: extract
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: |
+          FILE_PATH=$(echo "$ISSUE_BODY" | grep -i "^File" | sed 's/^File[^:]*:[[:space:]]*//' | head -1)
+          METHOD_NAME=$(echo "$ISSUE_TITLE" | sed 's/.*Test Request: //' | sed 's/[[:space:]].*//')
+          
+          echo "file_path=$FILE_PATH" >> $GITHUB_OUTPUT
+          echo "method_name=$METHOD_NAME" >> $GITHUB_OUTPUT
+          
+      - name: Create Jira Ticket via REST API
+        id: jira
+        env:
+          ATLASSIAN_EMAIL: ${{ secrets.ATLASSIAN_USER_EMAIL }}
+          ATLASSIAN_API_TOKEN: ${{ secrets.ATLASSIAN_API_TOKEN }}
+          ATLASSIAN_DOMAIN: ${{ secrets.ATLASSIAN_CLOUD_ID }}
+        run: |
+          # Extract domain from cloud ID if it's a URL
+          DOMAIN=$(echo "$ATLASSIAN_DOMAIN" | sed 's|https://||' | sed 's|/.*||')
+          
+          # Get project key (you may need to adjust this)
+          PROJECT_KEY="SCRUM"  # Change to your project key
+          
+          # Create Jira ticket
+          RESPONSE=$(curl -X POST \
+            -H "Content-Type: application/json" \
+            -u "${ATLASSIAN_EMAIL}:${ATLASSIAN_API_TOKEN}" \
+            "https://${DOMAIN}/rest/api/3/issue" \
+            -d '{
+              "fields": {
+                "project": {
+                  "key": "'"${PROJECT_KEY}"'"
+                },
+                "summary": "[LLTC] Unit test for ${{ steps.extract.outputs.method_name }} in ${{ steps.extract.outputs.file_path }}",
+                "description": {
+                  "type": "doc",
+                  "version": 1,
+                  "content": [
+                    {
+                      "type": "heading",
+                      "attrs": { "level": 1 },
+                      "content": [{ "type": "text", "text": "LLTC Generation Request - DO-178C Compliance" }]
+                    },
+                    {
+                      "type": "heading",
+                      "attrs": { "level": 2 },
+                      "content": [{ "type": "text", "text": "Source Information" }]
+                    },
+                    {
+                      "type": "bulletList",
+                      "content": [
+                        {
+                          "type": "listItem",
+                          "content": [{
+                            "type": "paragraph",
+                            "content": [
+                              { "type": "text", "text": "GitHub Issue: " },
+                              { "type": "text", "text": "${{ github.event.issue.html_url }}", "marks": [{"type": "link", "attrs": {"href": "${{ github.event.issue.html_url }}"}}] }
+                            ]
+                          }]
+                        },
+                        {
+                          "type": "listItem",
+                          "content": [{
+                            "type": "paragraph",
+                            "content": [{ "type": "text", "text": "File Path: ${{ steps.extract.outputs.file_path }}" }]
+                          }]
+                        },
+                        {
+                          "type": "listItem",
+                          "content": [{
+                            "type": "paragraph",
+                            "content": [{ "type": "text", "text": "Method/Function: ${{ steps.extract.outputs.method_name }}" }]
+                          }]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "heading",
+                      "attrs": { "level": 2 },
+                      "content": [{ "type": "text", "text": "Test Requirements" }]
+                    },
+                    {
+                      "type": "paragraph",
+                      "content": [{ "type": "text", "text": "Generate comprehensive LLTC tests with 100% coverage target for DO-178C compliance." }]
+                    }
+                  ]
+                },
+                "issuetype": {
+                  "name": "Task"
+                },
+                "labels": ["ai-generated-test", "lltc", "requires-review"]
+              }
+            }')
+          
+          # Extract ticket key
+          TICKET_KEY=$(echo "$RESPONSE" | jq -r '.key')
+          TICKET_URL="https://${DOMAIN}/browse/${TICKET_KEY}"
+          
+          echo "ticket_key=$TICKET_KEY" >> $GITHUB_OUTPUT
+          echo "ticket_url=$TICKET_URL" >> $GITHUB_OUTPUT
+          
+          echo "✅ Created Jira ticket: $TICKET_KEY"
+          
+      - name: Comment on GitHub Issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment ${{ github.event.issue.number }} --repo ${{ github.repository }} --body "### ✅ Jira Ticket Created
+
+          **Ticket:** [${{ steps.jira.outputs.ticket_key }}](${{ steps.jira.outputs.ticket_url }})
+
+          Claude Code will now generate tests for this request.
+          
+          ---
+          *Automated by Test Workflow*"
+
