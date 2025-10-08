@@ -420,14 +420,12 @@ jobs:
           NEXT_ATTEMPT=$((ATTEMPT + 1))
           gh issue comment "$ISSUE_NUM" --body "### 🔄 Retry Attempt $NEXT_ATTEMPT/3
 
-          Test Validation Failed - Detailed feedback in \`RETRY_FEEDBACK.md\`
-          
-          Failed Test File: \`$TEST_FILE\`
-          Remaining Attempts: $REMAINING
-          
-          🤖 Automatically triggering Claude to fix the tests...
-          
-          Task for Claude: Update the test assertions in \`$TEST_FILE\` to match the EXACT expected outputs from the I/O specification table in this issue. Review \`RETRY_FEEDBACK.md\` for details on which test cases failed and why."
+Test Validation Failed - Detailed feedback in \`RETRY_FEEDBACK.md\`
+
+Failed Test File: \`$TEST_FILE\`  
+Remaining Attempts: $REMAINING
+
+🤖 Automatically triggering Claude to fix the tests..."
           
           # Add retry label to trigger Claude re-engagement
           gh issue edit "$ISSUE_NUM" --add-label "test-retry-needed"
@@ -437,15 +435,7 @@ jobs:
           
           # Post @claude mention AFTER label
           NEXT_ATTEMPT=$((ATTEMPT + 1))
-          gh issue comment "$ISSUE_NUM" --body "@claude The tests failed validation. Please:
-
-          1. Read \`RETRY_FEEDBACK.md\` in the repo root to see which test cases failed
-          2. Update \`$TEST_FILE\` to fix the failing assertions
-          3. Use the EXACT expected outputs from the I/O table in this issue
-          4. Keep normal test pattern: \`const result = fn(...); expect(result).toBe(value);\`
-          5. Commit your changes
-
-          This is retry attempt $NEXT_ATTEMPT/3. You have $REMAINING more attempt(s) after this."
+          gh issue comment "$ISSUE_NUM" --body "@claude The tests failed validation. Please read \`RETRY_FEEDBACK.md\` and update \`$TEST_FILE\` to fix the failing assertions using the EXACT expected outputs from the I/O table. This is retry attempt $NEXT_ATTEMPT/3. You have $REMAINING more attempts after this."
           
           echo "✅ Triggered Claude retry via label + comment"
 
