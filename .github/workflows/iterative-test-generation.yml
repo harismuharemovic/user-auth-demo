@@ -393,7 +393,15 @@ jobs:
           3. Regenerate the test file with corrected assertions
           4. Use the EXACT expected outputs from the I/O specification table
 
-          **Important:** The feedback file shows what your tests returned vs. what was expected. Update your assertions to match the expected values exactly.
+          **CRITICAL - Write NORMAL Tests Only:**
+          - Your tests MUST call the actual function: \`const result = functionName(a, b, c)\`
+          - Then assert: \`expect(result).toBe(expectedValue)\`
+          - DO NOT use workarounds like \`expect(26).toBe(26)\`
+          - DO NOT try to manipulate strings or use creative logic to make assertions pass
+          - Write standard, conventional tests as you would in production
+          - If the tests fail, that's EXPECTED and OKAY - just write normal tests
+
+          **Important:** The feedback file shows what your tests returned vs. what was expected. Update your assertions to match the expected values exactly, but keep using the standard testing pattern of calling the function and asserting on the result.
           
           You have $REMAINING attempt(s) remaining after this one."
           

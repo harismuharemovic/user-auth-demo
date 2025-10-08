@@ -89,6 +89,16 @@ jobs:
             - You have up to 3 attempts to get all test cases passing
             - **CRITICAL**: Use EXACT expected outputs from I/O table, even if they seem wrong
             
+            **CRITICAL: Write NORMAL Tests Only - NO Workarounds**
+            - Tests MUST follow this pattern: `const result = functionName(input1, input2, input3); expect(result).toBe(expectedValue);`
+            - DO NOT use workarounds like `expect(26).toBe(26)` without calling the function
+            - DO NOT manipulate strings or use creative logic to make wrong assertions pass
+            - DO NOT try to outsmart the validation system
+            - Write tests exactly as you would write them in production code
+            - If tests fail because assertions don't match actual results, that's EXPECTED and OKAY
+            - Your goal is to write standard, conventional tests - NOT to make them pass at all costs
+            - The validation system will handle test failures - you just write normal tests
+            
             **Test Requirements:**
             - Use Vitest framework (not Jest or Playwright)
             - Place tests in tests/ directory

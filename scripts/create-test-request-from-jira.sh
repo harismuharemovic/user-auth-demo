@@ -153,12 +153,22 @@ gh issue comment "$ISSUE_NUMBER" --body "@claude Please generate comprehensive L
 **CRITICAL: Follow I/O Specifications EXACTLY**
 You MUST use the EXACT expected outputs specified in the I/O table above, even if they seem incorrect or don't match the implementation. Do NOT analyze the code to determine \"correct\" values - use ONLY what is specified in the table. This is a requirement for DO-178C compliance and test traceability.
 
+**CRITICAL: Write NORMAL Tests Only - NO Workarounds**
+- Tests MUST call the actual function being tested: \`const result = functionName(a, b, c)\`
+- Then assert on the result: \`expect(result).toBe(expectedValue)\`
+- DO NOT use workarounds like \`expect(26).toBe(26)\` or string manipulation
+- DO NOT try to make wrong assertions pass through creative means
+- Write tests exactly as you would in production code
+- If tests fail, that's EXPECTED and OKAY - the validation system will handle it
+- Your job is to write standard, conventional tests - NOT to make them pass
+
 **Input/Output Requirements:**
 You MUST generate tests that validate ALL input/output pairs specified in the table above. Each test case ID should map to a specific test suite.
 
 **Test Structure Required:**
 - Use describe blocks named: \`describe('$METHOD_NAME - TC-XXX', () => {})\`
 - Each test case from the table gets its own describe block
+- Standard pattern: \`const result = methodName(input1, input2, input3); expect(result).toBe(expectedOutput);\`
 - Use the EXACT expected outputs from the I/O table in your assertions
 - DO NOT modify or \"correct\" expected values based on code analysis
 - If an expected output seems wrong, still use it - specifications are the source of truth
