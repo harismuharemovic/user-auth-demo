@@ -47,7 +47,10 @@ jobs:
           ISSUE_NUM="${{ steps.extract.outputs.issue_number }}"
           
           # Count previous attempt comments
-          ATTEMPT_COUNT=$(gh issue view "$ISSUE_NUM" --json comments --jq '.comments[].body' | grep -c "Test Attempt" || echo "0")
+          ATTEMPT_COUNT=$(gh issue view "$ISSUE_NUM" --json comments --jq '.comments[].body' | grep -c "Test Attempt" || true)
+          if [ -z "$ATTEMPT_COUNT" ] || [ "$ATTEMPT_COUNT" = "" ]; then
+            ATTEMPT_COUNT=0
+          fi
           ATTEMPT_NUMBER=$((ATTEMPT_COUNT + 1))
           
           echo "attempt_number=$ATTEMPT_NUMBER" >> $GITHUB_OUTPUT

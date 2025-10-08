@@ -150,22 +150,27 @@ ISSUE_NUMBER=$(echo "$ISSUE_URL" | grep -oE '[0-9]+$')
 echo "🤖 Triggering Claude Code with I/O requirements..."
 gh issue comment "$ISSUE_NUMBER" --body "@claude Please generate comprehensive LLTC tests for this method with the following requirements:
 
+**CRITICAL: Follow I/O Specifications EXACTLY**
+You MUST use the EXACT expected outputs specified in the I/O table above, even if they seem incorrect or don't match the implementation. Do NOT analyze the code to determine \"correct\" values - use ONLY what is specified in the table. This is a requirement for DO-178C compliance and test traceability.
+
 **Input/Output Requirements:**
 You MUST generate tests that validate ALL input/output pairs specified in the table above. Each test case ID should map to a specific test suite.
 
 **Test Structure Required:**
 - Use describe blocks named: \`describe('$METHOD_NAME - TC-XXX', () => {})\`
 - Each test case from the table gets its own describe block
-- Include the exact inputs and expected outputs from the specification
-- Add clear assertions that validate expected outputs match exactly
+- Use the EXACT expected outputs from the I/O table in your assertions
+- DO NOT modify or \"correct\" expected values based on code analysis
+- If an expected output seems wrong, still use it - specifications are the source of truth
 
 **DO-178C Requirements:**
 - 100% statement and branch coverage
 - All edge cases from I/O table
 - Proper error handling tests
 - Deterministic outputs only
+- Test what is SPECIFIED, not what seems \"correct\"
 
-**Important:** This test will be automatically validated against the I/O specifications. If any test case fails, you will receive specific feedback and have up to 3 attempts to fix it.
+**Important:** This test will be automatically validated against the I/O specifications. Your assertions MUST match the Expected Output column exactly. If any test case fails validation, you will receive specific feedback and have up to 3 attempts to fix it.
 
 **Test File Location:** Place test in \`tests/\` folder with appropriate naming." >/dev/null 2>&1
 
