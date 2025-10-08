@@ -141,21 +141,12 @@ jobs:
               body: message
             });
 
-  # Auto-approve and merge for demo purposes
+  # DISABLED: No auto-merge for any PRs
+  # All PRs require manual review and approval
   auto-merge:
     needs: validate
     runs-on: ubuntu-latest
-    # Only run for PRs from Claude implementations
-    # Match both old and new branch naming patterns
-    # EXCLUDE test generation PRs (require manual review per DO-178C)
-    if: |
-      (contains(github.event.pull_request.head.ref, 'claude-implementation') ||
-       contains(github.event.pull_request.head.ref, 'claude-impl-') ||
-       contains(github.event.pull_request.title, 'SCRUM-')) &&
-      !contains(github.event.pull_request.head.ref, 'test-gen/') &&
-      !contains(github.event.pull_request.labels.*.name, 'ai-generated') &&
-      !contains(github.event.pull_request.labels.*.name, 'do-not-auto-merge') &&
-      !contains(github.event.pull_request.labels.*.name, 'lltc')
+    if: false  # DISABLED - Manual review required for all PRs
 
     steps:
       - name: Checkout

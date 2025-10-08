@@ -1,127 +1,67 @@
-name: Test Orchestrator - LLTC Generation Pipeline
+name: Test Request Validator
 
 on:
   issues:
     types: [opened, labeled]
-  issue_comment:
-    types: [created]
 
 permissions:
-  contents: write
   issues: write
-  pull-requests: write
-  id-token: write
 
 jobs:
-  orchestrate-test-generation:
+  validate-request:
     runs-on: ubuntu-latest
-    # Only run for issues with test-request label or @claude-test mention
-    if: |
-      (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'test-request')) ||
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude-test'))
+    if: contains(github.event.issue.labels.*.name, 'test-request')
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Extract Test Request Details
-        id: extract
+      - name: Validate Test Request Format
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
           ISSUE_BODY: ${{ github.event.issue.body }}
           ISSUE_TITLE: ${{ github.event.issue.title }}
         run: |
-          echo "=== Extracting Test Request Details ==="
+          echo "=== Validating Test Request ==="
           
-          # Extract file path (look for "File:" or "File Path:" line)
-          FILE_PATH=$(echo "$ISSUE_BODY" | grep -i "^File" | sed 's/^File[^:]*:[[:space:]]*//' | head -1)
+          # Check for file path
+          FILE_PATH=$(echo "$ISSUE_BODY" | grep -i "^File" | head -1)
           
-          # Extract method name from title or body
-          METHOD_NAME=$(echo "$ISSUE_TITLE" | sed 's/.*Test Request: //' | sed 's/[[:space:]].*//')
+          # Check for code snippet
+          HAS_CODE=$(echo "$ISSUE_BODY" | grep -E '```(typescript|javascript|ts|js)' || echo "")
           
-          # Extract code snippet (content between ```typescript and ``` or ```javascript and ```)
-          CODE_SNIPPET=$(echo "$ISSUE_BODY" | sed -n '/```typescript/,/```/p' | sed '1d;$d')
-          if [ -z "$CODE_SNIPPET" ]; then
-            CODE_SNIPPET=$(echo "$ISSUE_BODY" | sed -n '/```javascript/,/```/p' | sed '1d;$d')
-          fi
-          if [ -z "$CODE_SNIPPET" ]; then
-            CODE_SNIPPET=$(echo "$ISSUE_BODY" | sed -n '/```ts/,/```/p' | sed '1d;$d')
-          fi
-          if [ -z "$CODE_SNIPPET" ]; then
-            CODE_SNIPPET=$(echo "$ISSUE_BODY" | sed -n '/```js/,/```/p' | sed '1d;$d')
-          fi
-          
-          # Extract additional context
-          ADDITIONAL_CONTEXT=$(echo "$ISSUE_BODY" | sed -n '/Additional Context:/,/```/p' | sed '1d;$d' | head -20)
-          
-          # Validation
-          if [ -z "$FILE_PATH" ] || [ -z "$CODE_SNIPPET" ]; then
-            echo "❌ Missing required information (file path or code snippet)"
+          if [ -z "$FILE_PATH" ] || [ -z "$HAS_CODE" ]; then
             echo "valid=false" >> $GITHUB_OUTPUT
-            exit 0
+          else
+            echo "valid=true" >> $GITHUB_OUTPUT
+            echo "✅ Valid test request format"
           fi
-          
-          # Save outputs
-          echo "file_path=$FILE_PATH" >> $GITHUB_OUTPUT
-          echo "method_name=$METHOD_NAME" >> $GITHUB_OUTPUT
-          echo "valid=true" >> $GITHUB_OUTPUT
-          
-          # Save code snippet and context to files
-          echo "$CODE_SNIPPET" > /tmp/code_snippet.txt
-          echo "$ADDITIONAL_CONTEXT" > /tmp/additional_context.txt
-          
-          echo "✅ Extracted file path: $FILE_PATH"
-          echo "✅ Extracted method name: $METHOD_NAME"
-          echo "✅ Extracted code snippet (${#CODE_SNIPPET} chars)"
 
       - name: Comment on Invalid Request
-        if: steps.extract.outputs.valid == 'false'
+        if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh issue comment ${{ github.event.issue.number }} --body "### ❌ Invalid Test Request
+          gh issue comment ${{ github.event.issue.number }} --body "### ❌ Invalid Test Request Format
 
-          Your test request is missing required information. Please ensure your issue includes:
+          Required format:
+          \`\`\`
+          File: path/to/file.ts
 
-          1. **File Path**: The file containing the method to test
-             \`\`\`
-             File: src/lib/validation.ts
-             \`\`\`
+          \`\`\`typescript
+          export function myFunction() {
+            // code here
+          }
+          \`\`\`
 
-          2. **Code Snippet**: The method to test in a code block
-             \`\`\`typescript
-             export function validateInput(input: string) {
-               // ... your code
-             }
-             \`\`\`
+          Additional Context:
+          - Test scenario 1
+          - Test scenario 2
+          \`\`\`
 
-          3. **Optional**: Additional test scenarios or context
-
-          Please update the issue and add the \`test-request\` label again."
-
+          **Tip**: Use the script: \`./scripts/create-test-request.sh <file> <method> \"context\"\`"
+          
           gh issue edit ${{ github.event.issue.number }} --remove-label "test-request"
 
-      - name: Wait for Jira Ticket Creation
-        if: steps.extract.outputs.valid == 'true'
-        run: |
-          echo "⏳ Waiting for Jira ticket to be created by create-jira-ticket workflow..."
-          sleep 5
-
-      - name: Label Issue
-        if: steps.extract.outputs.valid == 'true'
+      - name: Add Labels
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh issue edit ${{ github.event.issue.number }} \
-            --add-label "test-in-progress" \
-            --add-label "ai-generated"
-
+          gh issue edit ${{ github.event.issue.number }} --add-label "ai-generated"
+          echo "✅ Issue labeled - Claude Code will process automatically"
