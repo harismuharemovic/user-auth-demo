@@ -1,0 +1,286 @@
+---
+description: Automated test generation workflow for DO-178C compliant aviation software testing
+alwaysApply: false
+---
+
+# Automated Test Workflow Essentials
+
+## Overview
+Fully automated pipeline for generating, validating, and reviewing AI-generated unit tests with DO-178C aerospace compliance.
+
+## Quick Flow
+1. User requests test via script: `./scripts/create-test-request.sh <file> <method> "<context>"`
+2. Script creates Jira LLTC ticket via REST API
+3. Script creates GitHub issue with `test-request` label
+4. Script automatically triggers Claude Code via @mention
+5. Claude Code generates comprehensive tests (~90 seconds)
+6. Claude pushes to `claude/issue-{N}-{timestamp}` branch
+7. GitHub Actions workflow automatically runs tests (Vitest)
+8. If tests pass → PR created to `to-be-reviewed-tests` branch
+9. If tests fail → Comment on issue, no PR
+10. Human reviews PR using DO-178C checklist
+11. Human approves and merges manually (no auto-merge)
+
+## Critical Files
+- **Script**: `scripts/create-test-request.sh` - Entry point, creates Jira + GitHub issue
+- **Workflow**: `.github/workflows/test-and-pr.yml` - Runs tests, creates PR
+- **Workflow**: `.github/workflows/test-orchestrator.yml` - Validates issue format
+- **Rule**: `.cursor/rules/auto-test-generation.mdc` - AI assistant instructions
+
+## Environment Requirements
+Script requires these environment variables:
+- `ATLASSIAN_USER_EMAIL` - Jira user email
+- `ATLASSIAN_API_TOKEN` - Jira API token
+- `ATLASSIAN_DOMAIN` - Jira domain (e.g., your-site.atlassian.net)
+
+Store in `.env` file (gitignored) or shell profile.
+
+---
+
+## Detailed Workflow Components
+
+### 1. Test Request Script
+**File**: `scripts/create-test-request.sh`
+
+**Purpose**: Single entry point for test generation requests
+
+**What it does**:
+- Extracts code snippet from target file (first 20 lines)
+- Creates Jira ticket via REST API to project KAN
+- Creates GitHub issue with proper format
+- Automatically adds @claude comment to trigger generation
+- Provides monitoring commands
+
+**Usage pattern**:
+```bash
+./scripts/create-test-request.sh <file-path> <method-name> "<additional-context>"
+```
+
+**Output**:
+- Jira ticket URL (KAN-X)
+- GitHub issue URL (#X)
+- Monitor command for progress
+
+### 2. Jira Integration
+**Method**: Direct REST API calls
+
+**Why not MCP**: Environment variable handling issues in GitHub Actions
+
+**Ticket structure**:
+- Project: KAN (jira-workflow-demo)
+- Type: Task
+- Summary: `[LLTC] Unit test for {method} in {file}`
+- Labels: `ai-generated-test`, `lltc`, `requires-review`
+- Description: DO-178C formatted with file path, method, context
+
+**Traceability**: Every test has Jira ticket ↔ GitHub issue ↔ Test file ↔ PR linkage
+
+### 3. GitHub Issue Format
+**Required fields**:
+- Title: `Test Request: {methodName}`
+- Body must include:
+  - `File: {path}` line
+  - Code snippet in typescript/javascript/ts/js code block
+  - `**Jira Ticket**: {KAN-X}` reference
+- Labels: `test-request` (triggers workflow)
+
+**Auto-generated comment**:
+Script adds: `@claude Please generate comprehensive LLTC tests for this method with 100% coverage, testing all edge cases, error conditions, and valid inputs per DO-178C requirements.`
+
+### 4. Claude Code GitHub App
+**Trigger**: @claude mention in issue comments
+
+**What it does**:
+- Detects @mention automatically
+- Reads issue body for requirements
+- Generates comprehensive test file
+- Creates branch: `claude/issue-{N}-{timestamp}`
+- Commits test file
+- Pushes branch (does NOT create PR)
+- Comments on issue with summary
+
+**Test framework**: Uses Vitest (matches existing test patterns)
+
+**Coverage targets**:
+- 100% statement coverage
+- 100% branch coverage
+- All edge cases, error conditions, nominal cases
+- DO-178C compliance categories
+
+### 5. Automated Test Execution
+**Workflow**: `.github/workflows/test-and-pr.yml`
+
+**Trigger**: Push to `claude/issue-*` branches
+
+**Process**:
+1. Checkout the Claude branch
+2. Install dependencies (`npm ci`)
+3. Find test files (new or modified `.test.ts` files)
+4. Run Vitest: `npx vitest run` (NOT `npm test` which runs Playwright)
+5. Capture test output to `/tmp/test_output.txt`
+6. If tests pass → Continue to PR creation
+7. If tests fail → Comment on issue with error details, exit
+
+**Why Vitest not npm test**: `npm test` runs Playwright E2E tests which need server
+
+### 6. Automatic PR Creation
+**Conditions**: Only if ALL tests pass
+
+**Target branch**: `to-be-reviewed-tests` (not `main`)
+
+**PR structure**:
+- Title: Same as issue title
+- Body: Includes Jira traceability, test results, DO-178C checklist
+- Labels: `ai-generated`, `lltc`, `requires-review`
+- Auto-merge: **DISABLED**
+
+**Comment on issue**: Success message with PR link
+
+### 7. Failure Handling
+**If tests fail**:
+- No PR created
+- Comment posted to issue with:
+  - Test output (last 50 lines)
+  - Branch name for debugging
+  - Next steps instructions
+- Branch preserved for analysis
+
+**If no tests found**:
+- Comment on issue warning about missing test files
+- No PR created
+
+### 8. Manual Review Process
+**Required by DO-178C**: Human review mandatory for aviation software
+
+**Checklist**: 31-point review covering:
+- Test coverage (statement + branch)
+- Test quality (assertions, mocks)
+- DO-178C compliance (traceability, determinism)
+- Safety standards (error handling, cleanup)
+- Code quality (maintainability, performance)
+
+**Review workflow**:
+1. Review PR using checklist
+2. Run tests locally if needed
+3. Request changes or approve
+4. Manually merge to `to-be-reviewed-tests`
+5. Eventually promote to `main` after full validation
+
+---
+
+## DO-178C Compliance Features
+
+### Full Traceability
+- Jira ticket → GitHub issue → Test file → PR
+- Every test linked to requirements
+- Audit trail preserved in Git history
+
+### Human-in-the-Loop
+- AI generates, humans review
+- No automatic merging allowed
+- Explicit approval required
+
+### Quality Gates
+- Tests must pass before PR
+- Coverage targets enforced
+- Review checklist mandatory
+
+### Documentation
+- Test files include headers with traceability info
+- PRs include compliance information
+- Jira tickets track entire lifecycle
+
+---
+
+## AI Assistant Usage
+
+### When user says "Test {function}"
+1. Load credentials from `.env` or environment
+2. Identify file path and method name from context or ask
+3. Run `create-test-request.sh` automatically
+4. Monitor progress for ~90 seconds
+5. Check for PR creation
+6. Report final status with links
+
+### What NOT to do
+- Don't ask for confirmation - just run the script
+- Don't manually create issues or tickets
+- Don't manually trigger Claude - script handles it
+- Don't run `npm test` locally during workflow (runs Playwright)
+
+### What TO do
+- Use `npx vitest run` for local test verification
+- Check issue comments for Claude's progress
+- Verify PR was created and links to Jira
+- Confirm tests passed before reporting success
+
+---
+
+## Common Issues and Solutions
+
+### Tests fail with "Timed out waiting 120000ms"
+**Cause**: Running Playwright E2E tests instead of Vitest unit tests  
+**Solution**: Ensure workflow uses `npx vitest run`, not `npm test`
+
+### PR creation fails with "label not found"
+**Cause**: Required labels don't exist in repo  
+**Solution**: Create labels: `ai-generated`, `lltc`, `requires-review`, `test-in-progress`
+
+### Claude doesn't respond to @mention
+**Cause**: Claude Code GitHub App not installed or wrong label  
+**Solution**: Verify app installed, issue has `test-request` label
+
+### Jira ticket creation fails
+**Cause**: Invalid credentials or wrong project key  
+**Solution**: Verify environment variables, check project key in script (currently `KAN`)
+
+### Branch created but no PR
+**Cause**: Tests failed or workflow didn't trigger  
+**Solution**: Check workflow runs, verify tests pass locally with `npx vitest run`
+
+---
+
+## File Locations
+
+### Scripts
+- `scripts/create-test-request.sh` - Main test request script
+- `scripts/README.md` - Script documentation
+
+### Workflows
+- `.github/workflows/test-and-pr.yml` - Test runner and PR creator
+- `.github/workflows/test-orchestrator.yml` - Issue validator
+- `.github/workflows/test-review-enforcement.yml` - Posts review checklist
+
+### Documentation
+- `AUTOMATED_WORKFLOW.md` - User-facing workflow documentation
+- `.cursor/rules/auto-test-generation.mdc` - AI assistant instructions
+- `tests/README.md` - Test directory structure
+
+### Configuration
+- `.env` (gitignored) - Atlassian credentials
+- `vitest.config.ts` - Test framework configuration
+- `package.json` - Scripts: `npm run test:unit` for Vitest
+
+---
+
+## Performance Metrics
+
+### Timing
+- Script execution: ~5 seconds
+- Claude generation: 60-90 seconds
+- Test execution: 10-30 seconds
+- PR creation: 5-10 seconds
+- **Total**: ~2-3 minutes from request to PR
+
+### User Effort
+- One command: `./scripts/create-test-request.sh {file} {method} "{context}"`
+- Everything else automated
+- Review and approve when ready
+
+### Success Criteria
+- ✅ Jira ticket created
+- ✅ GitHub issue created
+- ✅ Tests generated
+- ✅ All tests passing
+- ✅ PR created to review branch
+- ✅ Full traceability maintained
