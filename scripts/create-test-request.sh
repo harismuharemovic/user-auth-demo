@@ -64,7 +64,7 @@ JIRA_RESPONSE=$(curl -s -X POST \
     -d '{
       "fields": {
         "project": {
-          "key": "SCRUM"
+          "key": "KAN"
         },
         "summary": "[LLTC] Unit test for '"$METHOD_NAME"' in '"$FILE_PATH"'",
         "description": {
