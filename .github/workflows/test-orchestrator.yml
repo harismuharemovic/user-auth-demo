@@ -265,19 +265,17 @@ jobs:
           # Update Jira URL in comment
           gh issue comment ${{ github.event.issue.number }} --edit-last | sed 's|your-domain.atlassian.net|haris-muharemovic.atlassian.net|g' || true
 
-      - name: Trigger Test Generation Workflow
+      - name: Trigger Claude Code GitHub App
         if: steps.extract.outputs.valid == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Create a trigger file or use workflow_dispatch to start test generation
-          # Pass necessary context via workflow dispatch
-          
-          gh workflow run claude-test-generator.yml \
-            -f issue_number="${{ github.event.issue.number }}" \
-            -f jira_key="${{ steps.jira_details.outputs.jira_key }}" \
-            -f file_path="${{ steps.extract.outputs.file_path }}" \
-            -f method_name="${{ steps.extract.outputs.method_name }}"
+          # Claude Code GitHub App will automatically pick up issues with test-request label
+          # and the Jira ticket key in the comments. No manual trigger needed.
+          echo "✅ Claude Code GitHub App will process this issue automatically"
+          echo "Jira Key: ${{ steps.jira_details.outputs.jira_key }}"
+          echo "File: ${{ steps.extract.outputs.file_path }}"
+          echo "Method: ${{ steps.extract.outputs.method_name }}"
 
       - name: Label Issue
         if: steps.extract.outputs.valid == 'true'
