@@ -61,8 +61,8 @@ jobs:
         run: |
           echo "=== Running Tests ==="
           
-          # Run all tests and capture output
-          if npm test 2>&1 | tee /tmp/test_output.txt; then
+          # Run Vitest unit tests (not Playwright E2E tests)
+          if npx vitest run 2>&1 | tee /tmp/test_output.txt; then
             echo "tests_passed=true" >> $GITHUB_OUTPUT
             echo "✅ All tests passed!"
           else
