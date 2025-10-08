@@ -244,11 +244,9 @@ jobs:
           ATTEMPT="${{ needs.extract-metadata.outputs.attempt_number }}"
           REMAINING=$((3 - ATTEMPT))
           
-          gh issue comment "$ISSUE_NUM" --body "@claude 
+          gh issue comment "$ISSUE_NUM" --body "### ❌ Test Attempt $ATTEMPT Failed
 
-          ### ❌ Test Attempt $ATTEMPT Failed
-          
-          Some test cases did not pass validation. Please review and fix.
+          Some test cases did not pass validation. Auto-retry will trigger shortly.
           
           **Validation Results:**
           \`\`\`
@@ -257,13 +255,106 @@ jobs:
           
           **You have $REMAINING attempt(s) remaining.**
           
-          **Instructions:**
-          1. Review the failed test cases above
-          2. Update the test file to correctly handle these inputs and expected outputs
-          3. Ensure each test case uses \`describe('methodName - TC-XXX', ...)\` naming
-          4. Push your changes to this branch - tests will run automatically
+          📝 A RETRY_FEEDBACK.md file with detailed failure information will be committed to trigger automatic retry."
+
+      - name: Auto-commit feedback to trigger retry
+        if: steps.check_final.outputs.is_final != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ATTEMPT="${{ needs.extract-metadata.outputs.attempt_number }}"
+          VALIDATION_OUTPUT=$(cat /tmp/results/validation-output.txt)
+          REMAINING=$((3 - ATTEMPT))
           
-          Please fix the failing tests and try again."
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Checkout the Claude branch
+          git fetch origin ${{ github.ref }}
+          git checkout ${{ github.ref_name }}
+          
+          # Create feedback file
+          cat > RETRY_FEEDBACK.md << 'EOF'
+          # Test Validation Failure Report
+          
+          **Attempt:** ATTEMPT_NUM/3
+          **Remaining Attempts:** REMAINING_NUM
+          **Timestamp:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          
+          ## Validation Results
+          
+          ```
+          VALIDATION_OUTPUT_PLACEHOLDER
+          ```
+          
+          ## Instructions for AI Test Generator
+          
+          The tests you generated do not match the expected input/output specifications in the GitHub issue.
+          
+          **Critical Requirements:**
+          1. Each test case must use the EXACT expected output from the I/O table
+          2. Test naming must follow: `describe('methodName - TC-XXX', ...)`
+          3. Review the validation errors above - they show what your tests returned vs. what was expected
+          4. DO NOT change expected values based on code analysis - use ONLY the specified values
+          
+          **What to fix:**
+          - Review each failed TC-XXX case above
+          - Update the assertions in your test file to match the Expected Output column
+          - Ensure test descriptions match the pattern for validation to work
+          
+          Please regenerate the test file with corrections and push your changes.
+          EOF
+          
+          # Replace placeholders (using perl for better multiline handling)
+          perl -i -pe "s/ATTEMPT_NUM/$ATTEMPT/g" RETRY_FEEDBACK.md
+          perl -i -pe "s/REMAINING_NUM/$REMAINING/g" RETRY_FEEDBACK.md
+          
+          # For validation output, write it separately to avoid escaping issues
+          {
+            echo "# Test Validation Failure Report"
+            echo ""
+            echo "**Attempt:** $ATTEMPT/3"
+            echo "**Remaining Attempts:** $REMAINING"
+            echo "**Timestamp:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+            echo ""
+            echo "## Validation Results"
+            echo ""
+            echo '```'
+            cat /tmp/results/validation-output.txt
+            echo '```'
+            echo ""
+            echo "## Instructions for AI Test Generator"
+            echo ""
+            echo "The tests you generated do not match the expected input/output specifications in the GitHub issue."
+            echo ""
+            echo "**Critical Requirements:**"
+            echo "1. Each test case must use the EXACT expected output from the I/O table"
+            echo "2. Test naming must follow: \`describe('methodName - TC-XXX', ...)\`"
+            echo "3. Review the validation errors above - they show what your tests returned vs. what was expected"
+            echo "4. DO NOT change expected values based on code analysis - use ONLY the specified values"
+            echo ""
+            echo "**What to fix:**"
+            echo "- Review each failed TC-XXX case above"
+            echo "- Update the assertions in your test file to match the Expected Output column"
+            echo "- Ensure test descriptions match the pattern for validation to work"
+            echo ""
+            echo "Please regenerate the test file with corrections and push your changes."
+          } > RETRY_FEEDBACK.md
+          
+          # Commit and push to trigger Claude
+          git add RETRY_FEEDBACK.md
+          git commit -m "test: retry attempt $ATTEMPT - validation feedback
+
+          Auto-generated feedback for test validation failures.
+          This commit triggers automatic retry of test generation.
+          
+          Attempt: $ATTEMPT/3
+          Remaining: $REMAINING"
+          
+          git push origin ${{ github.ref_name }}
+          
+          echo "✅ Feedback committed - this will trigger Claude to retry"
 
       - name: Handle final failure
         if: steps.check_final.outputs.is_final == 'true'

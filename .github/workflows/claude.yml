@@ -74,6 +74,12 @@ jobs:
           custom_instructions: |
             ## Test Generation Guidelines
             
+            **IMPORTANT: Check for RETRY_FEEDBACK.md First!**
+            - If a RETRY_FEEDBACK.md file exists in the repo root, READ IT FIRST
+            - This file contains validation failures from previous attempts
+            - It shows exactly which test cases failed and why
+            - Use this feedback to fix the specific failing assertions
+            
             **For I/O-Driven Test Requests:**
             - If the issue contains an "Input/Output Test Cases" table, this is an I/O-driven request
             - You MUST create tests that validate ALL test cases in the table
@@ -81,6 +87,7 @@ jobs:
             - Each TC-XXX ID must have a corresponding test suite
             - Tests will be validated against expected outputs automatically
             - You have up to 3 attempts to get all test cases passing
+            - **CRITICAL**: Use EXACT expected outputs from I/O table, even if they seem wrong
             
             **Test Requirements:**
             - Use Vitest framework (not Jest or Playwright)
