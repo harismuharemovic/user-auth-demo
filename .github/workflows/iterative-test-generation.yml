@@ -18,13 +18,27 @@ jobs:
       issue_number: ${{ steps.extract.outputs.issue_number }}
       jira_key: ${{ steps.extract.outputs.jira_key }}
       attempt_number: ${{ steps.attempt.outputs.attempt_number }}
+      should_skip: ${{ steps.check_skip.outputs.should_skip }}
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.ref }}
+
+      - name: Check if this is a retry feedback commit
+        id: check_skip
+        run: |
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          echo "Commit message: $COMMIT_MSG"
+          
+          if echo "$COMMIT_MSG" | grep -q "^test: retry attempt"; then
+            echo "should_skip=true" >> $GITHUB_OUTPUT
+            echo "⏭️  Skipping - this is a retry feedback commit (will trigger Claude instead)"
+          else
+            echo "should_skip=false" >> $GITHUB_OUTPUT
+            echo "✅ This is a test generation commit - proceeding with validation"
+          fi
 
       - name: Extract issue number from branch
         id: extract
@@ -60,6 +74,7 @@ jobs:
 
   run-tests-and-validate:
     needs: extract-metadata
+    if: needs.extract-metadata.outputs.should_skip != 'true'
     runs-on: ubuntu-latest
     outputs:
       all_passed: ${{ steps.validate.outputs.all_passed }}
