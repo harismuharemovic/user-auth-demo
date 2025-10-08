@@ -232,35 +232,7 @@ jobs:
             echo "Not final attempt yet ($ATTEMPT/3)"
           fi
 
-      - name: Generate retry guidance
-        if: steps.check_final.outputs.is_final != 'true'
-        id: retry
-        run: |
-          ATTEMPT="${{ needs.extract-metadata.outputs.attempt_number }}"
-          
-          # Read validation output
-          VALIDATION_OUTPUT=$(cat /tmp/results/validation-output.txt || echo "No validation output available")
-          
-          # Create retry guidance
-          cat > /tmp/retry-guidance.md << 'EOF'
-          ### ❌ Test Attempt $ATTEMPT Failed
-          
-          Some test cases did not pass validation. Please review and fix.
-          
-          **Validation Results:**
-          ```
-          $VALIDATION_OUTPUT
-          ```
-          
-          **You have REMAINING_ATTEMPTS attempt(s) remaining.**
-          
-          Please update your tests to handle the failed test cases correctly and push your changes.
-          EOF
-          
-          REMAINING=$((3 - ATTEMPT))
-          sed -i "s/\$ATTEMPT/$ATTEMPT/g" /tmp/retry-guidance.md
-          sed -i "s/REMAINING_ATTEMPTS/$REMAINING/g" /tmp/retry-guidance.md
-          sed -i "s|\$VALIDATION_OUTPUT|$VALIDATION_OUTPUT|g" /tmp/retry-guidance.md
+      # Retry guidance is generated inline in the comment step below
 
       - name: Comment with retry guidance
         if: steps.check_final.outputs.is_final != 'true'
