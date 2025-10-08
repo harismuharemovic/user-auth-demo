@@ -1,0 +1,92 @@
+---
+alwaysApply: false
+---
+## Directory Structure
+
+```
+.cursor/rules
+├── README.mdc              # Meta-rules (this file)
+├── codebase_structure.mdc  # Overall codebase organization patterns
+├── architecture.mdc        # System architecture and design patterns
+├── features/              # Feature-specific rule files
+│   ├── flutter.mdc        # Flutter development patterns
+│   ├── firebase.mdc       # Backend integration patterns  
+│   ├── testing.mdc        # Testing strategies
+│   ├── ui-ux.mdc         # Design system and UI patterns
+│   └── ...               # Other feature-specific rules
+```
+
+## Rule Writing Guidelines
+
+### File Structure
+Each rule file (.mdc) MUST follow this structure:
+
+#### Mandatory Frontmatter Section
+All .mdc files MUST begin with a frontmatter section between `---` delimiters:
+
+```yaml
+---
+description: Brief description of what this rule file covers
+alwaysApply: false
+---
+```
+
+**Frontmatter Fields:**
+- `description` (required): A concise description of the rule file's purpose
+- `alwaysApply` (optional, default: false): Whether these rules should always be applied
+  - Set to `true` for fundamental rules that should always be active
+  - Set to `false` for context-specific rules that apply only when relevant
+
+#### Content Structure
+After the frontmatter, include your rule content:
+
+```markdown
+# Topic Essentials (≈ 25 lines max)
+- 🔑 Must-know bullets optimized for quick embedding
+- Use plain language, numbered or dashed lists
+- Keep concise for AI context windows
+
+### House Style
+- **Format**: Use Markdown with .mdc extension
+- **Length**: Keep files under 200 lines total
+- **Lists**: Prefer bullet points and numbered lists over prose paragraphs
+- **Code**: Don't include code snippets
+- **Links**: Use relative links to other docs (`../docs/file.mdc`)
+- **Filenames**: Use lowercase-kebab-case (e.g., `flutter-testing.mdc`)
+- **Context**: Include one-sentence context cues for AI embeddings
+
+### Content Guidelines
+- **Be concise**: Every word should add value
+- **Be actionable**: Focus on what to do, not what not to do
+- **Be current**: Keep rules up-to-date with latest practices
+- **Be consistent**: Follow established patterns across files
+
+### What NOT to Include
+Avoid adding ephemeral or time-sensitive information that provides no value to AI agents:
+
+- **❌ Ticket/Issue Numbers**: Don't reference JIRA tickets, GitHub issues (e.g., "AD-5868", "PROJ-1234")
+- **❌ Temporary Requirements**: Avoid "until Q3 2024" or "pending migration" type rules
+- **❌ Environment-specific URLs**: No hardcoded domains like "illume.localhost:8080" - use templates like `{base_url}`
+- **❌ Internal References**: No employee names, team structures, or internal URLs
+- **❌ Tenant-specific Data**: Avoid specific customer names, IDs, or configurations
+- **❌ Version-specific Workarounds**: Don't include temporary fixes for bugs that will be resolved
+- **❌ Historical Context**: Avoid "previously we did X, now we do Y" - just state current practice
+- **❌ TODO Comments**: Don't include pending tasks or future plans
+
+**Instead, focus on:**
+- **✅ Timeless Patterns**: Architectural decisions and design principles
+- **✅ Best Practices**: Coding standards that apply regardless of context
+- **✅ Technical Requirements**: Core functionality and constraints
+- **✅ Business Rules**: Fundamental logic that drives the feature
+- **✅ Template Variables**: Use `{base_url}`, `{tenant_id}`, `{api_version}` for environment-specific values
+
+### Section Priorities
+1. **Essentials**: Most critical information first (top 25 lines)
+2. **Implementation**: Concrete patterns and examples
+3. **Edge Cases**: Less common but important scenarios
+4. **References**: Links to detailed documentation
+
+### Quality Checks
+- Each rule file should be under 200 lines
+- External links should be verified regularly
+- Migration tasks should be updated as they're completed

@@ -27,21 +27,20 @@ jobs:
           
       - name: Create Jira Ticket via REST API
         id: jira
-        env:
-          ATLASSIAN_EMAIL: ${{ secrets.ATLASSIAN_USER_EMAIL }}
-          ATLASSIAN_API_TOKEN: ${{ secrets.ATLASSIAN_API_TOKEN }}
-          ATLASSIAN_DOMAIN: ${{ secrets.ATLASSIAN_CLOUD_ID }}
         run: |
-          # Extract domain from cloud ID if it's a URL
-          DOMAIN=$(echo "$ATLASSIAN_DOMAIN" | sed 's|https://||' | sed 's|/.*||')
+          # Extract domain from cloud ID - avoid secret masking by not storing in variable
+          DOMAIN=$(echo "${{ secrets.ATLASSIAN_CLOUD_ID }}" | sed 's|https://||' | sed 's|/.*||')
           
           # Get project key (you may need to adjust this)
           PROJECT_KEY="SCRUM"  # Change to your project key
           
+          EMAIL="${{ secrets.ATLASSIAN_USER_EMAIL }}"
+          TOKEN="${{ secrets.ATLASSIAN_API_TOKEN }}"
+          
           # Create Jira ticket
-          RESPONSE=$(curl -X POST \
+          RESPONSE=$(curl -s -X POST \
             -H "Content-Type: application/json" \
-            -u "${ATLASSIAN_EMAIL}:${ATLASSIAN_API_TOKEN}" \
+            -u "${EMAIL}:${TOKEN}" \
             "https://${DOMAIN}/rest/api/3/issue" \
             -d '{
               "fields": {

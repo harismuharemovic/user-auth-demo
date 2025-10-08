@@ -1,0 +1,168 @@
+---
+description: End-to-end testing patterns using Playwright with cross-browser support, accessibility validation, and performance benchmarking
+alwaysApply: false
+---
+
+# Testing Essentials
+
+## Framework & Tools
+- **E2E Testing**: Playwright for browser automation and E2E testing
+- **Component Testing**: Vitest with Storybook integration for isolated component tests
+- **Test Location**: All E2E tests in `/tests` directory with `.spec.ts` extension
+- **Configuration**: `playwright.config.ts` for E2E, `vitest.config.ts` for component tests
+- **Base URL**: `http://localhost:3001` (auto-started before tests via webServer config)
+
+## Test Organization Patterns
+- Use `test.describe()` blocks to group related test scenarios
+- Nest `test.describe()` for logical sub-grouping (e.g., form validation, user flows)
+- Use `beforeEach()` hooks for common setup like page navigation
+- Name tests descriptively using "should [expected behavior]" format
+- Keep test files focused on specific features or user flows
+
+## Cross-Browser Testing Strategy
+- **Desktop Browsers**: Chrome, Firefox, Safari (WebKit)
+- **Mobile Viewports**: Mobile Chrome (Pixel 5), Mobile Safari (iPhone 12)
+- Tests run across all projects by default for comprehensive coverage
+- Use `npx playwright test --project=chromium` to target specific browser during development
+
+## Test Data Management
+- Define reusable test data as constants at top of spec files
+- Use unique identifiers (timestamps, UUIDs) for registration tests to avoid conflicts
+- Example pattern: `const TEST_USER_EMAIL = 'testuser@example.com'`
+- Keep test data DRY across related test cases
+
+## Element Selection Best Practices
+- **Prefer ARIA roles**: `page.getByRole('button', { name: 'Sign in' })`
+- **Use semantic locators**: `page.getByRole('textbox', { name: 'Email' })`
+- **Leverage data attributes**: `page.locator('[data-testid="submit-button"]')`
+- **Check element states**: `await expect(element).toHaveAttribute('data-state', 'active')`
+- Avoid brittle selectors like CSS classes or complex XPath expressions
+
+## Accessibility Testing Requirements
+- Test keyboard navigation with `page.keyboard.press('Tab')` and `page.keyboard.press('Enter')`
+- Verify ARIA attributes: `role="alert"`, `aria-label`, `aria-live="polite"`
+- Validate focus indicators are visible with proper contrast
+- Ensure non-color means of conveying information (icons, text prefixes)
+- Test theme toggle accessibility across light and dark modes
+- Target WCAG 2.1 AA compliance for color contrast ratios
+
+## Form Validation Testing
+- Test empty field validation errors
+- Test invalid format validation (email, phone, password strength)
+- Test field mismatch validation (password confirmation)
+- Test error message visibility and accessibility
+- Verify error messages clear when user types
+- Test duplicate data prevention (e.g., email already in use)
+- Verify success message display and accessibility
+
+## Authentication Flow Testing
+- **Registration**: Complete flow with form reset and success message
+- **Login**: Valid credentials → redirect to dashboard
+- **Logout**: Clear session and redirect to auth page
+- **Protected Routes**: Verify authentication required for dashboard
+- **Error Handling**: Invalid credentials, network errors, server errors
+- Test form state preservation when switching between tabs
+
+## Network & Performance Testing
+- Use `page.waitForResponse()` to validate API calls
+- Monitor network requests during form submission
+- Test graceful handling of network errors with `page.route()` to block APIs
+- Set performance benchmarks (e.g., login < 5 seconds)
+- Measure and assert on operation duration
+
+## Dark Mode Testing
+- Test theme toggle button visibility and functionality
+- Verify `html` element has/doesn't have `dark` class
+- Test theme persistence in localStorage across page reloads
+- Verify theme consistency across page navigation
+- Test system preference detection with `page.emulateMedia({ colorScheme: 'dark' })`
+- Validate proper contrast ratios in both light and dark modes
+
+## Test Execution & Debugging
+- **Run all tests**: `npm run test`
+- **Interactive mode**: `npm run test:ui`
+- **Headed mode**: `npm run test:headed`
+- **Debug mode**: `npm run test:debug`
+- **Specific file**: `npx playwright test tests/auth.spec.ts`
+- **Single test**: Add `.only` to test (remove before committing)
+
+## Failure Artifacts
+- Screenshots captured automatically on test failure (`screenshot: 'only-on-failure'`)
+- Videos recorded for failed tests (`video: 'retain-on-failure'`)
+- Trace files collected on first retry for debugging (`trace: 'on-first-retry'`)
+- Artifacts stored in `test-results/` directory (gitignored)
+
+## CI/CD Configuration
+- **Parallel execution**: `fullyParallel: true` for faster test runs
+- **CI-specific settings**: Retries (2x), sequential workers, forbid `.only`
+- **Server management**: Auto-start dev server, reuse existing server locally
+- **Timeout**: 120s for server startup to handle slow environments
+- Fail builds if `test.only` accidentally left in source code
+
+## Page Object Pattern (Implicit)
+- Extract repeated navigation patterns into helper functions
+- Use consistent locator strategies across related tests
+- Keep page-specific logic within test describe blocks
+- Consider explicit Page Object Models for complex multi-page flows
+
+## Common Test Patterns
+
+### Complete User Journey
+- Register → Login → Perform action → Logout
+- Use unique identifiers for each journey test
+- Verify success at each step before proceeding
+- Test full flow in single test for integration validation
+
+### Loading States
+- Monitor network requests with `page.waitForResponse()`
+- Verify form submission triggers expected API calls
+- Check loading indicators appear during async operations
+- Confirm button states change appropriately
+
+### Error State Testing
+- Trigger validation errors by submitting invalid data
+- Verify error message content and positioning
+- Test error styling in both light and dark modes
+- Confirm errors have proper ARIA attributes
+
+### State Persistence
+- Test localStorage/sessionStorage values
+- Verify state survives page reload
+- Test state preservation across navigation
+- Confirm proper cleanup on logout
+
+## Color Contrast Validation
+- Test primary text: light mode ~4.5:1 ratio, dark mode inverse
+- Test muted text: ensure minimum AA compliance
+- Test interactive elements: buttons, links, form controls
+- Test focus indicators: visible in both themes
+- Test error/success messages: sufficient contrast ratios
+- Use CSS property assertions to validate computed colors
+
+## Security Testing Considerations
+- Verify sensitive data not exposed in DOM or console
+- Test session timeout and cleanup
+- Verify protected routes redirect to login
+- Test CSRF protection on form submissions
+- Validate proper logout clears all session data
+
+## Test Maintenance
+- Update tests when UI changes to avoid flakiness
+- Keep test data constants synchronized with backend validation
+- Remove obsolete tests when features are deprecated
+- Refactor duplicate test logic into shared helpers
+- Document known issues in test comments with context
+
+## Performance Optimization
+- Use `page.goto()` with appropriate wait strategies
+- Leverage `fullyParallel` for independent tests
+- Minimize `page.waitForTimeout()` - prefer explicit wait conditions
+- Cache authentication state for tests requiring logged-in user
+- Use `beforeEach` wisely - only setup what's needed
+
+## Reporting & Monitoring
+- Default reporter: HTML report (`playwright-report/index.html`)
+- View report: `npx playwright show-report`
+- CI reporters: Consider JSON/JUnit for integration
+- Track test execution time for regression detection
+- Monitor flaky tests and investigate root causes
