@@ -215,6 +215,19 @@ jobs:
           name: approved-test-file
           path: /tmp/approved
 
+      - name: Ensure success labels exist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ensure() {
+            NAME="$1"; COLOR="$2"; DESC="$3"
+            if ! gh label list --limit 200 --json name --jq '.[] | select(.name=="'"$NAME'"") | .name' | grep -q .; then
+              gh label create "$NAME" --color "$COLOR" --description "$DESC" || true
+            fi
+          }
+          ensure "tests-passed" "2ea44f" "All specified I/O tests passed"
+          ensure "ready-for-review" "5319e7" "Ready for human review"
+
       - name: Comment on success
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -240,6 +253,7 @@ jobs:
           The test will be placed in the \`unapproved-tests/\` folder for human review."
 
       - name: Add success label
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
