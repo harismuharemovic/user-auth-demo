@@ -14,6 +14,7 @@ jobs:
 
     steps:
       - name: Validate Test Request Format
+        id: validate
         env:
           ISSUE_BODY: ${{ github.event.issue.body }}
           ISSUE_TITLE: ${{ github.event.issue.title }}
@@ -34,7 +35,7 @@ jobs:
           fi
 
       - name: Comment on Invalid Request
-        if: failure()
+        if: steps.validate.outputs.valid == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -59,9 +60,10 @@ jobs:
           
           gh issue edit ${{ github.event.issue.number }} --remove-label "test-request"
 
-      - name: Add Labels
+      - name: Add Status Label  
+        if: steps.validate.outputs.valid == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh issue edit ${{ github.event.issue.number }} --add-label "ai-generated"
+          gh issue edit ${{ github.event.issue.number }} --add-label "test-in-progress"
           echo "✅ Issue labeled - Claude Code will process automatically"
