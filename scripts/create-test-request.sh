@@ -133,9 +133,19 @@ ISSUE_URL=$(gh issue create \
 
 echo "✅ Created GitHub issue: $ISSUE_URL"
 echo ""
+
+# Extract issue number from URL
+ISSUE_NUMBER=$(echo "$ISSUE_URL" | grep -oE '[0-9]+$')
+
+# Automatically trigger Claude Code
+echo "🤖 Triggering Claude Code to generate tests..."
+gh issue comment "$ISSUE_NUMBER" --body "@claude Please generate comprehensive LLTC tests for this method with 100% coverage, testing all edge cases, error conditions, and valid inputs per DO-178C requirements." >/dev/null 2>&1
+
+echo ""
 echo "=== Test Request Complete ==="
-echo "Jira: https://your-domain.atlassian.net/browse/$JIRA_KEY"
+echo "Jira: https://haris-muharemovic.atlassian.net/browse/$JIRA_KEY"
 echo "GitHub: $ISSUE_URL"
 echo ""
-echo "⏳ Claude Code will now generate tests automatically..."
+echo "✅ Claude Code triggered automatically - tests will be generated shortly"
+echo "   Monitor progress: gh issue view $ISSUE_NUMBER --comments"
 
