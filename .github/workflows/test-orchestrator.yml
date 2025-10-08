@@ -114,6 +114,10 @@ jobs:
         if: steps.extract.outputs.valid == 'true'
         id: jira
         uses: anthropics/claude-code-action@beta
+        env:
+          ATLASSIAN_USER_EMAIL: ${{ secrets.ATLASSIAN_USER_EMAIL }}
+          ATLASSIAN_API_TOKEN: ${{ secrets.ATLASSIAN_API_TOKEN }}
+          ATLASSIAN_CLOUD_ID: ${{ secrets.ATLASSIAN_CLOUD_ID }}
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           
@@ -122,7 +126,12 @@ jobs:
               "mcpServers": {
                 "atlassian": {
                   "command": "npx",
-                  "args": ["-y", "@modelcontextprotocol/server-atlassian"]
+                  "args": ["-y", "@modelcontextprotocol/server-atlassian"],
+                  "env": {
+                    "ATLASSIAN_USER_EMAIL": "$ATLASSIAN_USER_EMAIL",
+                    "ATLASSIAN_API_TOKEN": "$ATLASSIAN_API_TOKEN",
+                    "ATLASSIAN_CLOUD_ID": "$ATLASSIAN_CLOUD_ID"
+                  }
                 }
               }
             }
