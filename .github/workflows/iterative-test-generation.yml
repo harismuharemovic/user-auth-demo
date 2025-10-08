@@ -1,0 +1,335 @@
+name: Iterative Test Generation with I/O Validation
+
+on:
+  push:
+    branches:
+      - 'claude/issue-*'
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  extract-metadata:
+    runs-on: ubuntu-latest
+    outputs:
+      issue_number: ${{ steps.extract.outputs.issue_number }}
+      jira_key: ${{ steps.extract.outputs.jira_key }}
+      attempt_number: ${{ steps.attempt.outputs.attempt_number }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+
+      - name: Extract issue number from branch
+        id: extract
+        run: |
+          BRANCH_NAME="${{ github.ref_name }}"
+          ISSUE_NUMBER=$(echo "$BRANCH_NAME" | grep -oE 'issue-([0-9]+)' | grep -oE '[0-9]+')
+          echo "issue_number=$ISSUE_NUMBER" >> $GITHUB_OUTPUT
+          echo "Extracted issue number: $ISSUE_NUMBER"
+          
+          # Get Jira key from issue body
+          JIRA_KEY=$(gh issue view "$ISSUE_NUMBER" --json body --jq '.body' | grep -oE 'KAN-[0-9]+' | head -1 || echo "")
+          echo "jira_key=$JIRA_KEY" >> $GITHUB_OUTPUT
+          echo "Found Jira key: $JIRA_KEY"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine attempt number
+        id: attempt
+        run: |
+          ISSUE_NUM="${{ steps.extract.outputs.issue_number }}"
+          
+          # Count previous attempt comments
+          ATTEMPT_COUNT=$(gh issue view "$ISSUE_NUM" --json comments --jq '.comments[].body' | grep -c "Test Attempt" || echo "0")
+          ATTEMPT_NUMBER=$((ATTEMPT_COUNT + 1))
+          
+          echo "attempt_number=$ATTEMPT_NUMBER" >> $GITHUB_OUTPUT
+          echo "This is attempt number: $ATTEMPT_NUMBER"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  run-tests-and-validate:
+    needs: extract-metadata
+    runs-on: ubuntu-latest
+    outputs:
+      all_passed: ${{ steps.validate.outputs.all_passed }}
+      test_file: ${{ steps.find_tests.outputs.test_file }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Find test files
+        id: find_tests
+        run: |
+          # Find new or modified test files
+          TEST_FILES=$(git diff --name-only origin/main...HEAD | grep -E '\.(test|spec)\.(ts|tsx|js|jsx)$' || echo "")
+          
+          if [ -z "$TEST_FILES" ]; then
+            echo "No test files found"
+            echo "has_tests=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          # Use first test file found
+          TEST_FILE=$(echo "$TEST_FILES" | head -1)
+          echo "test_file=$TEST_FILE" >> $GITHUB_OUTPUT
+          echo "has_tests=true" >> $GITHUB_OUTPUT
+          echo "Found test file: $TEST_FILE"
+
+      - name: Run tests with JSON reporter
+        id: run_tests
+        continue-on-error: true
+        run: |
+          # Run Vitest with JSON reporter
+          npx vitest run --reporter=json --reporter=verbose --outputFile=/tmp/vitest-results.json 2>&1 | tee /tmp/test_output.txt
+          
+          # Check exit code
+          if [ $? -eq 0 ]; then
+            echo "tests_passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "tests_passed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Validate against I/O requirements
+        id: validate
+        continue-on-error: true
+        env:
+          OUTPUT_FILE: /tmp/validation-report.json
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ISSUE_NUM="${{ needs.extract-metadata.outputs.issue_number }}"
+          
+          # Run validation
+          if node scripts/validate-test-io.js "$ISSUE_NUM" /tmp/vitest-results.json > /tmp/validation-output.txt; then
+            echo "all_passed=true" >> $GITHUB_OUTPUT
+            echo "✅ All I/O test cases passed!"
+          else
+            echo "all_passed=false" >> $GITHUB_OUTPUT
+            echo "❌ Some I/O test cases failed"
+          fi
+          
+          # Output validation results
+          cat /tmp/validation-output.txt
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-attempt-${{ needs.extract-metadata.outputs.attempt_number }}
+          path: |
+            /tmp/vitest-results.json
+            /tmp/validation-report.json
+            /tmp/validation-output.txt
+            /tmp/test_output.txt
+
+      - name: Upload test file on success
+        if: steps.validate.outputs.all_passed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: approved-test-file
+          path: ${{ steps.find_tests.outputs.test_file }}
+
+  handle-success:
+    needs: [extract-metadata, run-tests-and-validate]
+    if: needs.run-tests-and-validate.outputs.all_passed == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+
+      - name: Download test file
+        uses: actions/download-artifact@v4
+        with:
+          name: approved-test-file
+          path: /tmp/approved
+
+      - name: Comment on success
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ISSUE_NUM="${{ needs.extract-metadata.outputs.issue_number }}"
+          ATTEMPT="${{ needs.extract-metadata.outputs.attempt_number }}"
+          TEST_FILE="${{ needs.run-tests-and-validate.outputs.test_file }}"
+          
+          gh issue comment "$ISSUE_NUM" --body "### ✅ All Test Cases Passed! (Attempt $ATTEMPT)
+
+          All input/output test cases have been validated successfully!
+          
+          **Test File:** \`$TEST_FILE\`
+          **Attempt:** $ATTEMPT of 3
+          **Status:** Ready for review
+          
+          The test file has been saved as an artifact. To retrieve it locally:
+          
+          \`\`\`bash
+          ./scripts/download-approved-test.sh $ISSUE_NUM
+          \`\`\`
+          
+          The test will be placed in the \`unapproved-tests/\` folder for human review."
+
+      - name: Add success label
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ISSUE_NUM="${{ needs.extract-metadata.outputs.issue_number }}"
+          gh issue edit "$ISSUE_NUM" --add-label "tests-passed" --add-label "ready-for-review"
+          gh issue edit "$ISSUE_NUM" --remove-label "test-in-progress"
+
+  handle-failure:
+    needs: [extract-metadata, run-tests-and-validate]
+    if: needs.run-tests-and-validate.outputs.all_passed != 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Download test results
+        uses: actions/download-artifact@v4
+        with:
+          name: test-results-attempt-${{ needs.extract-metadata.outputs.attempt_number }}
+          path: /tmp/results
+
+      - name: Check if final attempt
+        id: check_final
+        run: |
+          ATTEMPT="${{ needs.extract-metadata.outputs.attempt_number }}"
+          if [ "$ATTEMPT" -ge 3 ]; then
+            echo "is_final=true" >> $GITHUB_OUTPUT
+            echo "This was the final attempt (3/3)"
+          else
+            echo "is_final=false" >> $GITHUB_OUTPUT
+            echo "Not final attempt yet ($ATTEMPT/3)"
+          fi
+
+      - name: Generate retry guidance
+        if: steps.check_final.outputs.is_final != 'true'
+        id: retry
+        run: |
+          ATTEMPT="${{ needs.extract-metadata.outputs.attempt_number }}"
+          
+          # Read validation output
+          VALIDATION_OUTPUT=$(cat /tmp/results/validation-output.txt || echo "No validation output available")
+          
+          # Create retry guidance
+          cat > /tmp/retry-guidance.md << 'EOF'
+          ### ❌ Test Attempt $ATTEMPT Failed
+          
+          Some test cases did not pass validation. Please review and fix.
+          
+          **Validation Results:**
+          ```
+          $VALIDATION_OUTPUT
+          ```
+          
+          **You have REMAINING_ATTEMPTS attempt(s) remaining.**
+          
+          Please update your tests to handle the failed test cases correctly and push your changes.
+          EOF
+          
+          REMAINING=$((3 - ATTEMPT))
+          sed -i "s/\$ATTEMPT/$ATTEMPT/g" /tmp/retry-guidance.md
+          sed -i "s/REMAINING_ATTEMPTS/$REMAINING/g" /tmp/retry-guidance.md
+          sed -i "s|\$VALIDATION_OUTPUT|$VALIDATION_OUTPUT|g" /tmp/retry-guidance.md
+
+      - name: Comment with retry guidance
+        if: steps.check_final.outputs.is_final != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ISSUE_NUM="${{ needs.extract-metadata.outputs.issue_number }}"
+          VALIDATION_OUTPUT=$(cat /tmp/results/validation-output.txt)
+          ATTEMPT="${{ needs.extract-metadata.outputs.attempt_number }}"
+          REMAINING=$((3 - ATTEMPT))
+          
+          gh issue comment "$ISSUE_NUM" --body "@claude 
+
+          ### ❌ Test Attempt $ATTEMPT Failed
+          
+          Some test cases did not pass validation. Please review and fix.
+          
+          **Validation Results:**
+          \`\`\`
+          $VALIDATION_OUTPUT
+          \`\`\`
+          
+          **You have $REMAINING attempt(s) remaining.**
+          
+          **Instructions:**
+          1. Review the failed test cases above
+          2. Update the test file to correctly handle these inputs and expected outputs
+          3. Ensure each test case uses \`describe('methodName - TC-XXX', ...)\` naming
+          4. Push your changes to this branch - tests will run automatically
+          
+          Please fix the failing tests and try again."
+
+      - name: Handle final failure
+        if: steps.check_final.outputs.is_final == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ATLASSIAN_USER_EMAIL: ${{ secrets.ATLASSIAN_USER_EMAIL }}
+          ATLASSIAN_API_TOKEN: ${{ secrets.ATLASSIAN_API_TOKEN }}
+          ATLASSIAN_DOMAIN: ${{ secrets.ATLASSIAN_DOMAIN }}
+        run: |
+          ISSUE_NUM="${{ needs.extract-metadata.outputs.issue_number }}"
+          JIRA_KEY="${{ needs.extract-metadata.outputs.jira_key }}"
+          VALIDATION_OUTPUT=$(cat /tmp/results/validation-output.txt)
+          
+          # Extract first failed test case for summary
+          FAILED_TC=$(echo "$VALIDATION_OUTPUT" | grep "❌ TC-" | head -1 | grep -oE "TC-[0-9]+" || echo "Multiple")
+          
+          # Comment on GitHub issue
+          gh issue comment "$ISSUE_NUM" --body "### ❌ Test Generation Failed After 3 Attempts
+          
+          Unable to generate passing tests after 3 attempts.
+          
+          **Final Validation Results:**
+          \`\`\`
+          $VALIDATION_OUTPUT
+          \`\`\`
+          
+          **Next Steps:**
+          1. Review the Jira ticket for accuracy
+          2. Check if expected outputs are correct
+          3. Verify the method implementation handles all cases
+          4. Consider manual test creation or code fixes
+          
+          The Jira ticket has been updated with this failure information."
+          
+          # Add failure labels
+          gh issue edit "$ISSUE_NUM" --add-label "test-generation-failed" --remove-label "test-in-progress"
+          gh issue close "$ISSUE_NUM"
+          
+          # Update Jira ticket
+          if [ ! -z "$JIRA_KEY" ] && [ ! -z "$ATLASSIAN_API_TOKEN" ]; then
+            echo "Updating Jira ticket $JIRA_KEY..."
+            ./scripts/update-jira-test-failure.sh "$JIRA_KEY" "$FAILED_TC" "$ISSUE_NUM" "$VALIDATION_OUTPUT" || echo "Failed to update Jira"
+          fi
+

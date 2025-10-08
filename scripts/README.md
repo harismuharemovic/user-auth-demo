@@ -1,6 +1,80 @@
 # Test Request Scripts
 
-## create-test-request.sh
+## I/O-Driven Workflow (Recommended for Precise Testing)
+
+### create-test-request-from-jira.sh
+
+Creates GitHub issue from existing Jira ticket with Input/Output specifications.
+
+**Setup**: Same as traditional workflow (see below)
+
+**Usage**:
+```bash
+./scripts/create-test-request-from-jira.sh <jira-ticket-key>
+```
+
+**Example**:
+```bash
+./scripts/create-test-request-from-jira.sh KAN-123
+```
+
+**Jira Ticket Requirements**:
+Your Jira ticket must include an I/O table:
+```
+| Test Case ID | Input Parameters | Expected Output | Notes |
+|--------------|------------------|-----------------|-------|
+| TC-001       | "hello"          | "HELLO"         | Basic case |
+| TC-002       | ""               | ""              | Empty string |
+| TC-003       | null             | Error thrown    | Null handling |
+```
+
+**What happens**:
+1. Script retrieves Jira ticket
+2. Validates I/O table format
+3. Creates GitHub issue with I/O requirements
+4. Claude generates tests matching I/O specs
+5. Tests validated automatically (up to 3 attempts)
+6. Approved tests available for download
+
+### download-approved-test.sh
+
+Downloads approved test from GitHub workflow artifacts.
+
+**Usage**:
+```bash
+./scripts/download-approved-test.sh <issue-number>
+```
+
+**Example**:
+```bash
+./scripts/download-approved-test.sh 42
+```
+
+**What it does**:
+1. Finds successful workflow run for the issue
+2. Downloads test file artifact
+3. Places test in `unapproved-tests/` folder
+4. Ready for local review
+
+**Next steps**:
+```bash
+# Review test
+cat unapproved-tests/myFunction.test.ts
+
+# Run locally
+npx vitest run unapproved-tests/
+
+# Approve
+mv unapproved-tests/myFunction.test.ts tests/
+git add tests/myFunction.test.ts
+git commit -m "Add approved tests"
+```
+
+---
+
+## Traditional Workflow
+
+### create-test-request.sh
 
 Creates a Jira LLTC ticket and GitHub issue for test generation.
 

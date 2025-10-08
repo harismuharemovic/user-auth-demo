@@ -13,6 +13,14 @@ jobs:
     if: contains(github.event.issue.labels.*.name, 'test-request')
 
     steps:
+      - name: Checkout code for validation
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Validate Test Request Format
         id: validate
         env:
@@ -27,11 +35,29 @@ jobs:
           # Check for code snippet
           HAS_CODE=$(echo "$ISSUE_BODY" | grep -E '```(typescript|javascript|ts|js)' || echo "")
           
-          if [ -z "$FILE_PATH" ] || [ -z "$HAS_CODE" ]; then
+          # Check if this is an I/O-driven request
+          IS_IO_DRIVEN=$(echo "$ISSUE_BODY" | grep -i "Input/Output" || echo "")
+          
+          if [ ! -z "$IS_IO_DRIVEN" ]; then
+            echo "Detected I/O-driven test request - validating I/O table..."
+            
+            # Validate I/O table
+            if node scripts/validate-io-table.js "$ISSUE_BODY"; then
+              echo "✅ Valid I/O table"
+              echo "valid=true" >> $GITHUB_OUTPUT
+              echo "io_driven=true" >> $GITHUB_OUTPUT
+            else
+              echo "❌ Invalid I/O table"
+              echo "valid=false" >> $GITHUB_OUTPUT
+              echo "io_driven=true" >> $GITHUB_OUTPUT
+            fi
+          elif [ -z "$FILE_PATH" ] || [ -z "$HAS_CODE" ]; then
             echo "valid=false" >> $GITHUB_OUTPUT
+            echo "io_driven=false" >> $GITHUB_OUTPUT
           else
             echo "valid=true" >> $GITHUB_OUTPUT
-            echo "✅ Valid test request format"
+            echo "io_driven=false" >> $GITHUB_OUTPUT
+            echo "✅ Valid test request format (traditional)"
           fi
 
       - name: Comment on Invalid Request
@@ -39,7 +65,26 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh issue comment ${{ github.event.issue.number }} --body "### ❌ Invalid Test Request Format
+          if [ "${{ steps.validate.outputs.io_driven }}" = "true" ]; then
+            # I/O-driven request with invalid table
+            gh issue comment ${{ github.event.issue.number }} --body "### ❌ Invalid I/O-Driven Test Request
+
+          Your test request is missing a valid Input/Output table.
+
+          **Required I/O Table Format:**
+          \`\`\`
+          | Test Case ID | Input Parameters | Expected Output | Notes |
+          |--------------|------------------|-----------------|-------|
+          | TC-001       | input1, input2   | output1         | Happy path |
+          | TC-002       | null, undefined  | Error thrown    | Error handling |
+          \`\`\`
+
+          **Tip**: Use the script: \`./scripts/create-test-request-from-jira.sh <jira-ticket-key>\`
+          
+          Or create a Jira ticket with proper I/O specifications first."
+          else
+            # Traditional request with invalid format
+            gh issue comment ${{ github.event.issue.number }} --body "### ❌ Invalid Test Request Format
 
           Required format:
           \`\`\`
@@ -56,7 +101,10 @@ jobs:
           - Test scenario 2
           \`\`\`
 
-          **Tip**: Use the script: \`./scripts/create-test-request.sh <file> <method> \"context\"\`"
+          **Tips**: 
+          - Traditional: \`./scripts/create-test-request.sh <file> <method> \"context\"\`
+          - I/O-driven: \`./scripts/create-test-request-from-jira.sh <jira-key>\`"
+          fi
           
           gh issue edit ${{ github.event.issue.number }} --remove-label "test-request"
 

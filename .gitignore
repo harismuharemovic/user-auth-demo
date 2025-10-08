@@ -67,6 +67,12 @@ Thumbs.db
 tests/staging/*
 !tests/staging/.gitkeep
 
+# AI Test Generation - Unapproved Tests
+# Review before committing to main test suite
+unapproved-tests/*.test.ts
+unapproved-tests/*.spec.ts
+!unapproved-tests/README.md
+
 # AI Test Generation - Logs
 # Keep audit logs but ignore temp files
 logs/*.log

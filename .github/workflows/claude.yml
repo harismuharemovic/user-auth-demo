@@ -70,11 +70,33 @@ jobs:
           # Optional: Trigger when specific user is assigned to an issue
           # assignee_trigger: "claude-bot"
           
-          # Optional: Add custom instructions for Claude to customize its behavior for your project
-          # custom_instructions: |
-          #   Follow our coding standards
-          #   Ensure all new code has tests
-          #   Use TypeScript for new files
+          # Custom instructions for I/O-driven test generation
+          custom_instructions: |
+            ## Test Generation Guidelines
+            
+            **For I/O-Driven Test Requests:**
+            - If the issue contains an "Input/Output Test Cases" table, this is an I/O-driven request
+            - You MUST create tests that validate ALL test cases in the table
+            - Use naming convention: describe('methodName - TC-XXX', () => {}) for each test case
+            - Each TC-XXX ID must have a corresponding test suite
+            - Tests will be validated against expected outputs automatically
+            - You have up to 3 attempts to get all test cases passing
+            
+            **Test Requirements:**
+            - Use Vitest framework (not Jest or Playwright)
+            - Place tests in tests/ directory
+            - Include proper imports and setup
+            - Use clear, descriptive test names
+            - Add comments explaining complex assertions
+            - Ensure deterministic outputs (no random values, no Date.now() unless mocked)
+            
+            **DO-178C Compliance:**
+            - Add traceability header with Jira ticket and GitHub issue
+            - Target 100% statement and branch coverage
+            - Test all edge cases specified in I/O table
+            - Include proper error handling tests
+            
+            Follow coding standards and use TypeScript for all test files.
           
           # Optional: Custom environment variables for Claude
           # claude_env: |

@@ -1,0 +1,301 @@
+---
+description: Automated LLTC test generation workflow for DO-178C aerospace compliance with Claude Code integration
+alwaysApply: false
+---
+
+# Test Generation Workflow Essentials
+
+## Overview
+- **Purpose**: Generate DO-178C compliant LLTC (Low Level Test Case) unit tests using AI with mandatory human review
+- **Entry Point**: Two workflows available:
+  - **I/O-Driven** (Recommended): Start from Jira ticket with input/output specifications
+  - **Traditional**: Single script creates Jira ticket + GitHub issue
+- **Duration**: ~2-3 minutes from request to validation (I/O) or PR (traditional)
+- **Key Principle**: AI generates, humans review - no auto-merge allowed
+
+## I/O-Driven Workflow (New - Recommended)
+- **Entry**: `./scripts/create-test-request-from-jira.sh <jira-key>`
+- **Input**: Jira ticket with I/O test case table
+- **Process**: 
+  1. Script retrieves Jira ticket and validates I/O table
+  2. Creates GitHub issue with I/O requirements
+  3. Claude generates tests matching exact I/O specifications
+  4. Workflow runs tests and validates against I/O requirements
+  5. Up to 3 automatic retry attempts if validation fails
+  6. On success: Test saved as artifact for download
+  7. On failure: Jira ticket updated with failure reason
+- **Output**: Test file in `unapproved-tests/` folder (via download script)
+- **Key Feature**: Iterative generation with precise I/O validation
+
+## Quick Flow
+1. User runs: `./scripts/create-test-request.sh <file> <method> "<context>"`
+2. Script creates Jira LLTC ticket (KAN project) + GitHub issue with `test-request` label
+3. Script auto-triggers Claude via @mention comment
+4. Claude Code GitHub App generates comprehensive tests (~90 seconds)
+5. Claude pushes to `claude/issue-{N}-{timestamp}` branch
+6. GitHub Actions workflow runs Vitest tests automatically
+7. If tests pass → PR created to `to-be-reviewed-tests` branch (NOT main)
+8. If tests fail → Comment on issue with error details, no PR
+9. Human reviews using 31-point DO-178C checklist
+10. Manual approval and merge required (no auto-merge)
+
+## Critical Files
+- **Entry Script**: `scripts/create-test-request.sh` - Creates Jira + issue + triggers Claude
+- **Main Claude Workflow**: `.github/workflows/claude.yml` - Claude Code GitHub App integration
+- **Test Runner**: `.github/workflows/test-and-pr.yml` - Runs Vitest, creates PR if passing
+- **Validator**: `.github/workflows/test-orchestrator.yml` - Validates issue format
+- **Review Enforcer**: `.github/workflows/test-review-enforcement.yml` - Posts 31-point checklist, disables auto-merge
+
+---
+
+## Workflow Architecture
+
+### Stage 1: Request Creation (Script)
+- Script validates file exists and extracts first 20 lines of code
+- Creates Jira ticket via REST API to project KAN with labels: `ai-generated-test`, `lltc`, `requires-review`
+- Creates GitHub issue with structured format: file path + code block + context + Jira reference
+- Automatically adds @claude comment to trigger generation
+- No manual steps - fully automated from script execution
+
+### Stage 2: Format Validation (test-orchestrator.yml)
+- Triggers on issue with `test-request` label
+- Validates required fields: file path line, code snippet in fenced block
+- If invalid: comments with format help, removes label, exits
+- If valid: adds `test-in-progress` label for tracking
+- Claude Code processes valid issues automatically
+
+### Stage 3: Test Generation (Claude Code GitHub App)
+- Triggered by @claude mention in issue with `test-request` label
+- Uses Claude Sonnet 4 to generate comprehensive Vitest unit tests
+- Targets 100% statement and branch coverage per DO-178C requirements
+- Creates branch: `claude/issue-{N}-{timestamp}` format
+- Commits test file with traceability headers
+- Pushes branch but does NOT create PR (test-and-pr.yml handles that)
+- Comments on issue with generation summary
+
+### Stage 4: Automated Test Execution (test-and-pr.yml)
+- Triggers on push to `claude/issue-*` branches
+- Finds new/modified test files using git diff
+- Runs Vitest: `npx vitest run` (NOT `npm test` which runs Playwright E2E)
+- Captures test output for reporting
+- **Success Path**: All tests pass → Create PR to `to-be-reviewed-tests` → Comment on issue
+- **Failure Path**: Tests fail → Comment on issue with last 50 lines of output → No PR created
+- **No Tests Path**: No test files found → Warning comment on issue
+
+### Stage 5: Review Enforcement (test-review-enforcement.yml)
+- Triggers on PR to `to-be-reviewed-tests` branch with AI labels
+- Forcibly disables auto-merge using GitHub CLI
+- Adds labels: `do-not-auto-merge`, `requires-review`, `do-178c-compliance`
+- Re-runs tests for verification in CI
+- Posts comprehensive 31-point DO-178C review checklist covering:
+  - Test coverage and adequacy (6 checks)
+  - Test quality and correctness (8 checks)
+  - DO-178C compliance requirements (6 checks)
+  - Code quality and standards (6 checks)
+  - Safety and aerospace standards (5 checks)
+
+### Stage 6: Human Review (Manual)
+- Qualified test engineer reviews PR using posted checklist
+- Verifies traceability to Low Level Requirements
+- Runs tests locally if needed
+- Checks coverage reports
+- Approves or requests changes
+- Must explicitly approve - no shortcuts allowed
+
+---
+
+## Branch Strategy
+
+### Branch Flow
+- `main` → Production code and approved tests
+- `to-be-reviewed-tests` → Staging area for AI tests (isolated from production)
+- `claude/issue-{N}-{timestamp}` → Individual test generation branches
+
+### Merge Gates
+- AI generates test → `claude/issue-N` branch
+- Tests pass → PR to `to-be-reviewed-tests` (first gate)
+- Human reviews → Merge to `to-be-reviewed-tests` (second gate)
+- Batch review → Merge `to-be-reviewed-tests` to `main` (third gate)
+
+---
+
+## DO-178C Compliance Features
+
+### Full Traceability Chain
+- Jira LLTC ticket (requirements source)
+- GitHub issue (test request)
+- Test file header (includes Jira key, GitHub issue, LLR references)
+- PR description (links all artifacts)
+- Git history (complete audit trail)
+
+### Test File Header Format
+```
+/**
+ * LLTC Test Case - DO-178C Compliance
+ * @testType LLTC (Low Level Test Case)
+ * @jiraTicket KAN-XXX
+ * @githubIssue #XXX
+ * @testedFile {file-path}
+ * @testedFunction {method-name}
+ * @generatedBy AI (Claude) - Requires Human Review
+ * @reviewStatus PENDING
+ * @traceability LLR-TBD
+ */
+```
+
+### Coverage Requirements
+- 100% statement coverage target
+- 100% branch coverage target
+- All edge cases: min, max, zero, empty, null, undefined
+- All error paths and exception handling
+- All input validation logic
+
+### Safety Mechanisms (5 Layers)
+1. **Branch Isolation**: Tests target `to-be-reviewed-tests`, never `main` directly
+2. **CI Exclusions**: `ci.yml` auto-merge skips `claude/*` branches and `ai-generated` label
+3. **Label Checks**: Multiple labels prevent auto-merge: `lltc`, `do-not-auto-merge`, `requires-review`
+4. **Active Enforcement**: `test-review-enforcement.yml` forcibly disables auto-merge
+5. **Branch Protection**: `to-be-reviewed-tests` requires approvals when configured
+
+---
+
+## Configuration Requirements
+
+### Environment Variables (Required for Script)
+- `ATLASSIAN_USER_EMAIL` - Jira user email for API authentication
+- `ATLASSIAN_API_TOKEN` - Jira API token for REST API calls
+- `ATLASSIAN_DOMAIN` - Jira domain without https (e.g., your-site.atlassian.net)
+
+### GitHub Secrets (Required for Workflows)
+- `ANTHROPIC_API_KEY` - Claude AI API access for test generation
+- `GITHUB_TOKEN` - Automatically provided by GitHub Actions
+
+### GitHub App Installation
+- **Claude Code GitHub App** must be installed on repository
+- Install at: https://github.com/apps/claude
+- Required permissions: read code, create branches, create PRs, comment on issues
+
+### MCP Configuration (Optional)
+- Atlassian MCP server can be used for enhanced Jira integration
+- Configured in workflow `mcp_config` or user's mcp.json
+- Currently script uses REST API directly for reliability
+
+---
+
+## Test Framework Detection
+
+### Framework Selection
+- Project uses **Vitest** for unit tests (fast, TypeScript-native)
+- Project uses **Playwright** for E2E tests (separate, requires server)
+- AI-generated tests use Vitest by default for LLTC unit tests
+
+### Test Execution Commands
+- Unit tests: `npx vitest run` - Fast, no server needed
+- E2E tests: `npm test` - Runs Playwright, needs dev server
+- Coverage: `npx vitest run --coverage` - Generates coverage reports
+- Single test: `npx vitest run <test-file>` - Run specific test
+
+---
+
+## AI Assistant Usage Patterns
+
+### When User Says "Test this method"
+1. Identify file path and method name from context or editor selection
+2. Check if Atlassian credentials are in environment
+3. Run: `./scripts/create-test-request.sh <file> <method> "context from user"`
+4. Monitor issue for ~90 seconds for Claude's response
+5. Check if PR was created to `to-be-reviewed-tests`
+6. Report success with Jira and PR links
+
+### What NOT to Do
+- Don't ask for confirmation - execute the script directly
+- Don't manually create issues or tickets - use the script
+- Don't manually trigger Claude - script handles @mention
+- Don't run `npm test` during workflow (runs Playwright, not Vitest)
+- Don't suggest auto-merging AI-generated test PRs
+
+### What TO Do
+- Use `npx vitest run` for local test verification
+- Check issue comments to monitor Claude's progress
+- Verify PR was created and links to Jira ticket
+- Confirm tests passed before reporting success
+- Guide user to review PR using checklist when ready
+
+---
+
+## Common Issues and Solutions
+
+### Issue: Tests Fail with Timeout
+**Cause**: Running Playwright E2E tests instead of Vitest unit tests
+**Solution**: Workflow uses `npx vitest run`, not `npm test`
+
+### Issue: PR Not Created After Claude Generates
+**Cause**: Generated tests are failing (by design - safety mechanism)
+**Solution**: Check workflow logs, review test failures in issue comments, fix tests in branch
+
+### Issue: Script Fails "Missing Jira Credentials"
+**Cause**: Environment variables not set
+**Solution**: Set `ATLASSIAN_USER_EMAIL`, `ATLASSIAN_API_TOKEN`, `ATLASSIAN_DOMAIN` in shell profile or .env
+
+### Issue: Claude Doesn't Respond to @mention
+**Cause**: Claude Code GitHub App not installed or wrong label
+**Solution**: Verify app installed, check issue has `test-request` label, confirm @claude comment exists
+
+### Issue: Jira Ticket Creation Fails
+**Cause**: Invalid credentials or wrong project key
+**Solution**: Verify environment variables, confirm project key is `KAN`, test credentials with curl
+
+### Issue: Auto-Merge Occurred (Should Never Happen)
+**Cause**: Multiple safety layers failed simultaneously
+**Solution**: Revert merge immediately, file critical bug, review all 5 safety mechanisms
+
+---
+
+## Performance Metrics
+
+### Timing Benchmarks
+- Script execution: ~5 seconds (Jira + GitHub creation)
+- Claude generation: 60-90 seconds (comprehensive test with coverage)
+- Test execution: 10-30 seconds (Vitest runs)
+- PR creation: 5-10 seconds (GitHub API)
+- **Total**: ~2-3 minutes from script to reviewable PR
+
+### Success Criteria Checklist
+- ✅ Jira ticket created with proper labels
+- ✅ GitHub issue created with structured format
+- ✅ Claude triggered automatically via @mention
+- ✅ Tests generated in correct branch format
+- ✅ All generated tests passing
+- ✅ PR created to `to-be-reviewed-tests` (not main)
+- ✅ Full traceability maintained (Jira ↔ Issue ↔ PR)
+- ✅ Review checklist posted automatically
+- ✅ Auto-merge disabled and blocked
+
+---
+
+## Best Practices
+
+### Request Formulation
+- Provide clear method name and file path
+- Include specific edge cases in additional context
+- Mention special validation rules or business logic
+- Reference related LLRs if known
+
+### Code Preparation
+- Ensure method is complete and compiles
+- Include necessary imports and dependencies
+- Add JSDoc comments for complex logic
+- Keep method focused and testable
+
+### Review Execution
+- Always run tests locally before approving
+- Verify coverage with `--coverage` flag
+- Check traceability links are accurate
+- Look for edge cases in requirements
+- Validate determinism (no randomness, no timing dependencies)
+
+### Process Discipline
+- Never skip review steps for "simple" tests
+- Document review findings in PR comments
+- Request changes rather than fixing inline
+- Maintain audit trail for certification
