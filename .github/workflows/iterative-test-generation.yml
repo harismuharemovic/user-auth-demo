@@ -388,21 +388,30 @@ jobs:
             echo "Please regenerate the test file with corrections and push your changes."
           } > RETRY_FEEDBACK.md
           
-          # Commit and push to trigger Claude
-          git add RETRY_FEEDBACK.md
-          git commit -m "test: retry attempt $ATTEMPT - validation feedback
-
-          Auto-generated feedback for test validation failures.
-          This commit triggers automatic retry of test generation.
+          # Commit and push with @claude mention in commit message
+          ISSUE_NUM="${{ needs.extract-metadata.outputs.issue_number }}"
           
-          Attempt: $ATTEMPT/3
-          Remaining: $REMAINING"
+          git add RETRY_FEEDBACK.md
+          git commit -m "test: retry attempt $ATTEMPT - @claude please fix tests
+
+Auto-generated feedback for test validation failures.
+
+@claude - Tests failed validation. Please:
+1. Read RETRY_FEEDBACK.md for failure details
+2. Update test file to fix assertions
+3. Use exact expected outputs from issue #$ISSUE_NUM I/O table
+4. Commit your changes
+
+Attempt: $ATTEMPT/3
+Remaining: $REMAINING attempts
+
+Closes #$ISSUE_NUM (if this is final attempt)"
           
           git push origin ${{ github.ref_name }}
           
-          echo "✅ Feedback committed - now triggering Claude to retry"
+          echo "✅ Feedback committed with @claude mention"
 
-      - name: Trigger Claude for retry
+      - name: Trigger Claude for retry via label manipulation
         if: steps.check_final.outputs.is_final != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -410,43 +419,40 @@ jobs:
           ISSUE_NUM="${{ needs.extract-metadata.outputs.issue_number }}"
           ATTEMPT="${{ needs.extract-metadata.outputs.attempt_number }}"
           REMAINING=$((3 - ATTEMPT))
-          
-          # Post comment to trigger Claude - be VERY explicit about the task
           TEST_FILE="${{ needs.run-tests-and-validate.outputs.test_file }}"
           
-          gh issue comment "$ISSUE_NUM" --body "@claude Fix the failing tests based on validation feedback.
+          # Post informational comment (not @claude, just info)
+          gh issue comment "$ISSUE_NUM" --body "### 🔄 Retry Attempt $((ATTEMPT + 1))/3
 
-          **TASK:** Modify the test file at \`$TEST_FILE\` to fix the failing test cases.
-
-          **RETRY ATTEMPT:** $((ATTEMPT + 1))/3
-
-          **WHAT FAILED:**
-          See the RETRY_FEEDBACK.md file in the repository root for detailed validation errors.
-
-          **WHAT TO DO:**
-          1. Open and read \`RETRY_FEEDBACK.md\` - it shows which test cases failed and why
-          2. Open the test file at \`$TEST_FILE\`
-          3. For each failed test case (TC-XXX), update the assertion to use the EXACT expected output from the GitHub issue I/O table
-          4. Keep the standard test pattern: \`const result = functionName(...); expect(result).toBe(expectedValue);\`
-          5. Commit your changes to this branch
-
-          **CRITICAL CONSTRAINTS:**
-          - Write NORMAL tests: \`const result = functionName(inputs); expect(result).toBe(expected);\`
-          - DO NOT use workarounds like \`expect(26).toBe(26)\` without calling the function
-          - Use ONLY the expected values from the I/O specification table in the GitHub issue
-          - If tests fail after your changes, that's OK - just write standard tests
-
-          **EXAMPLE FIX:**
-          If RETRY_FEEDBACK.md shows TC-001 failed because it expected 26 but got 14, update:
-          \`\`\`typescript
-          // Change the assertion value to 26 (from the I/O table)
-          const result = functionName(10, 3, 2);
-          expect(result).toBe(26);  // Use spec value, even if mathematically wrong
-          \`\`\`
-
-          You have $REMAINING attempt(s) remaining. Make the changes and commit to this branch."
+          **Test Validation Failed** - Detailed feedback in \`RETRY_FEEDBACK.md\`
           
-          echo "✅ Claude triggered for automatic retry"
+          **Failed Test File:** \`$TEST_FILE\`
+          **Remaining Attempts:** $REMAINING
+          
+          🤖 Automatically triggering Claude to fix the tests...
+          
+          ---
+          
+          **Task for Claude:** Update the test assertions in \`$TEST_FILE\` to match the EXACT expected outputs from the I/O specification table in this issue. Review \`RETRY_FEEDBACK.md\` for details on which test cases failed and why."
+          
+          # Add retry label to trigger Claude re-engagement
+          gh issue edit "$ISSUE_NUM" --add-label "test-retry-needed"
+          
+          # Wait a moment for label to be processed
+          sleep 2
+          
+          # Post @claude mention AFTER label
+          gh issue comment "$ISSUE_NUM" --body "@claude The tests failed validation. Please:
+
+1. Read \`RETRY_FEEDBACK.md\` in the repo root to see which test cases failed
+2. Update \`$TEST_FILE\` to fix the failing assertions
+3. Use the EXACT expected outputs from the I/O table in this issue
+4. Keep normal test pattern: \`const result = fn(...); expect(result).toBe(value);\`
+5. Commit your changes
+
+This is retry attempt $((ATTEMPT + 1))/3. You have $REMAINING more attempt(s) after this."
+          
+          echo "✅ Triggered Claude retry via label + comment"
 
       - name: Handle final failure
         if: steps.check_final.outputs.is_final == 'true'
