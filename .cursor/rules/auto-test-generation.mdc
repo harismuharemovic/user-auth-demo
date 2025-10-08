@@ -1,0 +1,148 @@
+# Automatic Test Generation Workflow
+
+## Purpose
+This rule defines how AI assistants should automatically handle test generation requests without manual intervention.
+
+## When User Requests Test Generation
+
+When the user says any of the following:
+- "Generate tests for [function/method]"
+- "Test [function/method]"
+- "Create tests for [code snippet]"
+- "I need tests for [function/method]"
+
+## Automatic Workflow
+
+### Step 1: Identify the Target
+1. Extract file path and method name from context or user input
+2. Read the source file to get the actual code
+3. Validate that the method exists
+
+### Step 2: Run the Script Automatically
+Execute the test request script with proper environment variables:
+
+```bash
+cd /Users/haris/Documents/user-auth-demo && \
+export ATLASSIAN_USER_EMAIL=h.muharemovic@gmail.com && \
+export ATLASSIAN_API_TOKEN='<from-env>' && \
+export ATLASSIAN_DOMAIN=haris-muharemovic.atlassian.net && \
+./scripts/create-test-request.sh <file-path> <method-name> "<context>"
+```
+
+### Step 3: Monitor and Report
+After running the script:
+1. Wait 60-90 seconds for Claude Code to process
+2. Check issue comments for progress
+3. Check for PR creation
+4. Report status to user
+
+### Step 4: Test Verification
+Once tests are generated:
+1. Run the tests locally to verify they pass
+2. Check test file was created
+3. Report test coverage and results
+
+## What NOT to Do
+
+❌ Don't ask the user if they want to proceed
+❌ Don't manually create issues or tickets
+❌ Don't explain each step - just do it
+❌ Don't ask about environment variables - use stored credentials
+❌ Don't wait for user confirmation
+
+## What TO Do
+
+✅ Automatically run the script
+✅ Automatically trigger Claude via the script (script now does this)
+✅ Monitor progress automatically
+✅ Report final status with links
+✅ Run tests to verify they pass
+
+## Example Interaction
+
+**User**: "Generate tests for validateVariableName"
+
+**AI Response**:
+```
+Creating test request for validateVariableName...
+
+✅ Jira ticket created: KAN-5
+✅ GitHub issue created: #10
+✅ Claude Code triggered
+⏳ Generating tests (this takes ~60 seconds)...
+
+[After waiting]
+✅ Tests generated: src/lib/code-helpers.test.ts
+✅ All tests passing (15 test cases)
+✅ Coverage: 100%
+✅ PR created: #11
+
+Ready for your review!
+```
+
+## Script Features
+
+The script (`create-test-request.sh`) now automatically:
+1. ✅ Creates Jira ticket via REST API
+2. ✅ Creates GitHub issue with proper format
+3. ✅ Adds @claude comment to trigger generation
+4. ✅ Provides monitoring commands
+
+## Environment Setup
+
+Store credentials in repo's .env (gitignored):
+```bash
+ATLASSIAN_USER_EMAIL=h.muharemovic@gmail.com
+ATLASSIAN_API_TOKEN=<token>
+ATLASSIAN_DOMAIN=haris-muharemovic.atlassian.net
+```
+
+Load with: `source .env` or `export $(cat .env | xargs)`
+
+## Quick Command Reference
+
+```bash
+# Full workflow (automatic)
+./scripts/create-test-request.sh src/lib/utils.ts myFunction "Test edge cases"
+
+# Monitor progress
+gh issue view <issue-number> --comments
+
+# Check for PR
+gh pr list | grep -i test
+
+# Run tests
+npm test <test-file>
+```
+
+## Success Criteria
+
+A successful automated workflow means:
+1. ✅ User makes one request: "test X"
+2. ✅ AI runs script automatically
+3. ✅ Jira ticket created
+4. ✅ GitHub issue created  
+5. ✅ Claude triggered automatically
+6. ✅ Tests generated
+7. ✅ Tests passing
+8. ✅ PR created
+9. ✅ AI reports: "Done! Review PR #X"
+
+Total time: ~2 minutes, fully automatic.
+
+## Error Handling
+
+If any step fails:
+1. Report the specific error
+2. Provide the exact command to retry
+3. Check logs: `gh run view --log`
+4. Check issue comments for Claude errors
+
+## Integration with DO-178C
+
+This workflow maintains DO-178C compliance:
+- ✅ Full traceability (Jira ↔ GitHub ↔ Tests)
+- ✅ Human review required (PR review)
+- ✅ No auto-merge (manual approval only)
+- ✅ Test quality checklist enforced
+- ✅ Audit trail preserved

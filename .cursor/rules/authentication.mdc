@@ -1,0 +1,275 @@
+---
+description: Authentication patterns using Next.js App Router, iron-session, and SQLite
+alwaysApply: false
+---
+
+# Authentication Essentials
+
+## Core Stack
+- **Session Management**: iron-session with HTTP-only cookies
+- **Password Security**: bcrypt with 10 salt rounds
+- **Database**: SQLite with promise-wrapped callbacks
+- **Framework**: Next.js 14+ App Router with Server Actions
+- **Validation**: Dual-layer (client + server) validation
+
+## Session Configuration
+- Cookie name: `myapp_session`
+- Requires `SECRET_COOKIE_PASSWORD` env variable
+- Secure flag enabled in production
+- Session data: `{ user?: { id: number; email: string } }`
+- Location: `src/lib/session.ts`
+
+## Database Schema
+```
+users table:
+- id (INTEGER PRIMARY KEY AUTOINCREMENT)
+- email (TEXT UNIQUE NOT NULL)
+- password_hash (TEXT NOT NULL)
+- address (TEXT)
+- phone (TEXT)
+- created_at (DATETIME DEFAULT CURRENT_TIMESTAMP)
+```
+
+## Authentication Flow Patterns
+
+### Registration Flow
+1. Client validates form (email format, password length ≥6, phone format, password match)
+2. POST to `/api/auth/register` with email, password, address, phone
+3. Server validates again (duplicate validation pattern)
+4. Hash password with bcrypt (10 rounds)
+5. Insert into database with error handling for UNIQUE constraint
+6. Return 201 on success, 409 for duplicate email
+7. User manually switches to login tab after success
+
+### Login Flow
+1. Client validates email format and required fields
+2. POST to `/api/auth/login` with email and password
+3. Server queries user by email
+4. Verify password with `bcrypt.compare()`
+5. Create iron-session and set user data
+6. Call `session.save()` to set HTTP-only cookie
+7. Return 200, client redirects to `/dashboard`
+8. Generic "Invalid credentials" message for security (don't reveal if email exists)
+
+### Logout Flow
+1. POST to `/api/auth/logout`
+2. Retrieve session via `getIronSession()`
+3. Set `session.user = undefined`
+4. Call `session.save()` to clear cookie
+5. Client redirects to `/auth`
+
+### Route Protection
+- Middleware checks for `myapp_session` cookie on protected routes
+- Protected routes array: `['/dashboard']`
+- Redirect to `/auth` if no cookie found
+- Middleware matcher excludes API routes, static files, Next.js internals
+- Cookie presence check only (no signature verification in middleware)
+
+## Implementation Patterns
+
+### Client-Side Component Structure
+- Use `'use client'` directive for auth pages
+- Tabbed interface with shadcn/ui Tabs component
+- Separate state for login and register forms
+- Loading states for async operations
+- Message state for success/error feedback with icons
+- Clear messages on user input
+- Disable inputs during submission
+- Form-specific TypeScript interfaces
+
+### API Route Structure
+```typescript
+// Pattern for all auth routes
+export async function POST(request: NextRequest) {
+  try {
+    // 1. Parse and validate request body
+    const body = await request.json();
+    
+    // 2. Server-side validation (duplicate client validation)
+    if (!field) return Response.json({ message: '...' }, { status: 400 });
+    
+    // 3. Database operation (wrapped in Promise)
+    const result = await new Promise((resolve, reject) => {
+      db.operation(params, (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+    
+    // 4. Return appropriate response
+    return Response.json({ message: '...' }, { status: 200 });
+    
+  } catch (error) {
+    // 5. Handle specific error types
+    if (error instanceof SyntaxError) { /* JSON parse error */ }
+    return Response.json({ message: 'Internal server error' }, { status: 500 });
+  }
+}
+```
+
+### Session Management Pattern
+```typescript
+// Get session in API routes
+const cookieStore = await cookies();
+const session = await getIronSession<{
+  user?: { id: number; email: string };
+}>(cookieStore, sessionOptions);
+
+// Set session data
+session.user = { id, email };
+await session.save();
+
+// Clear session
+session.user = undefined;
+await session.save();
+```
+
+### Database Promise Wrapper
+```typescript
+// Wrap SQLite callbacks in Promises for async/await
+const result = await new Promise<Type>((resolve, reject) => {
+  db.run(query, params, function(err) {
+    if (err) reject(err);
+    else resolve({ success: true });
+  });
+});
+```
+
+## Validation Rules
+
+### Email Validation
+- Regex: `/^[^\s@]+@[^\s@]+\.[^\s@]+$/`
+- Applied on both client and server
+- Required field
+
+### Password Validation
+- Minimum 6 characters
+- Required field
+- Registration requires password confirmation match
+- Hash before storage, never store plain text
+
+### Phone Validation
+- Regex: `/^\+?[\d\s\-\(\)]+$/`
+- Optional field (can be null in database)
+- Allows international format with +
+
+### Address Validation
+- No specific format requirements
+- Optional field (can be null in database)
+
+## Security Best Practices
+
+### Password Security
+- Always hash passwords with bcrypt before storage
+- Use consistent salt rounds (10)
+- Never return password_hash in API responses
+- Generic error messages for failed login attempts
+
+### Session Security
+- Use HTTP-only cookies (set via iron-session)
+- Secure flag in production environments
+- Strong SECRET_COOKIE_PASSWORD (32+ characters)
+- No session data in localStorage or client state
+
+### Error Handling
+- Generic "Invalid credentials" for login failures
+- Specific validation errors for registration
+- Log errors server-side with `console.error()`
+- Never expose stack traces to client
+- Handle UNIQUE constraint as 409 Conflict
+
+## User Feedback Patterns
+
+### Success States
+- Green color scheme (`text-green-600 dark:text-green-400`)
+- CheckCircle icon from lucide-react
+- Success message prefix
+- For registration: clear form and show success message
+- For login: immediate redirect to dashboard
+
+### Error States
+- Red color scheme (`text-red-600 dark:text-red-400`)
+- XCircle icon from lucide-react
+- Error message prefix
+- Keep form data (except passwords)
+- Use ARIA live regions for accessibility
+
+### Loading States
+- Disable form inputs during submission
+- Change button text ("Signing in...", "Creating Account...")
+- Disable submit button
+- Prevent double submission
+
+## File Organization
+
+### Core Auth Files
+```
+src/lib/
+  - session.ts         # Session config and type declarations
+  - db.ts             # Database connection and schema
+
+src/app/
+  auth/
+    - page.tsx        # Login/Register UI
+  api/auth/
+    login/
+      - route.ts      # Login endpoint
+    register/
+      - route.ts      # Registration endpoint
+    logout/
+      - route.ts      # Logout endpoint
+
+middleware.ts         # Route protection
+```
+
+## Common Pitfalls
+
+### Database Operations
+- ❌ Don't use callbacks directly in async functions
+- ✅ Wrap SQLite callbacks in Promises
+- ❌ Don't forget to handle UNIQUE constraint errors
+- ✅ Check for `err.message.includes('UNIQUE constraint failed')`
+
+### Session Management
+- ❌ Don't forget to await `session.save()`
+- ✅ Always save after modifying session data
+- ❌ Don't verify cookie signature in middleware (unnecessary overhead)
+- ✅ Just check cookie existence for basic protection
+
+### Password Handling
+- ❌ Don't validate password equality client-side only
+- ✅ Hash password server-side even if client validation fails
+- ❌ Don't return password_hash in user queries
+- ✅ Select only needed fields or explicitly exclude password_hash
+
+### Validation
+- ❌ Don't trust client-side validation alone
+- ✅ Always duplicate validation on server
+- ❌ Don't provide different errors for "email not found" vs "wrong password"
+- ✅ Use generic "Invalid credentials" for security
+
+## Extension Points
+
+### Adding OAuth
+- Maintain same session structure
+- Create additional API routes under `/api/auth/`
+- Store OAuth tokens in database if needed
+- Still use iron-session for session management
+
+### Adding Role-Based Access
+- Extend session type: `user?: { id, email, role }`
+- Add role column to users table
+- Check role in middleware or page components
+- Store role in session on login
+
+### Adding Password Reset
+- Create tokens table with expiry
+- Email verification endpoint
+- Reset form with token validation
+- Hash new password before update
+
+### Multi-Factor Authentication
+- Add mfa_enabled boolean to users table
+- Add mfa_secret for TOTP storage
+- Intermediate authentication state
+- Verify TOTP before setting full session

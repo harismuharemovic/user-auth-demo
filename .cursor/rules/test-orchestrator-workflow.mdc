@@ -1,0 +1,222 @@
+---
+description: Test orchestration workflow for DO-178C aerospace certification test generation pipeline
+alwaysApply: false
+---
+
+# Test Orchestrator Workflow Essentials
+
+## Purpose
+Automated pipeline that converts GitHub issues into LLTC (Low Level Test Cases) for DO-178C aerospace software certification. Bridges GitHub → Jira → Test Generation → Review.
+
+## Trigger Conditions
+- **Label-based**: Issue labeled with `test-request`
+- **Mention-based**: Issue comment containing `@claude-test`
+- **Auto-executes**: Validation → Jira creation → Test generation → Review staging
+
+## Required Issue Format
+
+### Mandatory Fields
+1. **File Path** - Must include line starting with "File:" or "File Path:"
+   ```
+   File: src/lib/validation.ts
+   ```
+
+2. **Code Snippet** - Method/function in fenced code block with language tag
+   ```typescript
+   export function validateInput(input: string) {
+     // implementation
+   }
+   ```
+
+### Optional Fields
+- **Method Name** - Extracted from title or auto-detected
+- **Additional Context** - Section labeled "Additional Context:" with test scenarios
+
+### Validation Rules
+- Missing file path → Issue labeled invalid, workflow exits
+- Missing code snippet → Issue labeled invalid, workflow exits
+- Valid format → Proceeds to Jira ticket creation
+
+## Workflow Stages
+
+### Stage 1: Extract Test Request
+- Parse issue body using grep/sed patterns
+- Support multiple language tags: `typescript`, `javascript`, `ts`, `js`
+- Extract first 20 lines of additional context
+- Save extracted data to temp files for downstream use
+
+### Stage 2: Create Jira LLTC Ticket
+Uses Claude Code Action with MCP Atlassian integration:
+- **Ticket Type**: Standard Jira issue (not Epic/Story)
+- **Title Format**: `[LLTC] Unit test for {method_name} in {file_path}`
+- **Labels**: `ai-generated-test`, `lltc`, `requires-review`
+- **Priority**: Medium or High (project-dependent)
+
+### Stage 3: Generate Test
+Triggers `claude-test-generator.yml` workflow with parameters:
+- `issue_number`: GitHub issue reference
+- `jira_key`: Created Jira ticket key
+- `file_path`: Source file to test
+- `method_name`: Function/method name
+
+### Stage 4: Update Issue
+- Comments with Jira link and progress status
+- Adds labels: `test-in-progress`, `ai-generated`
+- Keeps issue open until test review complete
+
+## DO-178C Compliance Requirements
+
+### Traceability
+- GitHub Issue → Jira LLTC ticket → Test file → Requirements
+- Jira ticket ID must appear in test file header comments
+- Bidirectional traceability maintained throughout pipeline
+
+### Test Coverage Targets
+- ✅ 100% statement coverage
+- ✅ 100% branch coverage
+- ✅ Normal/happy path cases
+- ✅ Edge cases and boundary conditions
+- ✅ Error handling scenarios
+- ✅ Input validation checks
+
+### Documentation Standards
+- Tests must be self-documenting with clear descriptions
+- Each test case includes expected results
+- Test purpose aligned with requirements
+- Comments explain non-obvious test logic
+
+### Human Review Gate
+- **Mandatory**: All AI-generated tests require human review
+- **Review location**: `to-be-reviewed-tests` branch
+- **Approval needed**: Before merging to main test suite
+- **Reviewer validates**: Coverage, correctness, compliance, maintainability
+
+## Integration Points
+
+### MCP Server Configuration
+```json
+{
+  "mcpServers": {
+    "atlassian": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-atlassian"]
+    }
+  }
+}
+```
+
+### Allowed MCP Tools
+- `mcp__atlassian__createJiraIssue` - Create LLTC ticket
+- `mcp__atlassian__getVisibleJiraProjects` - Discover target project
+- `mcp__atlassian__getJiraProjectIssueTypesMetadata` - Get project schema
+
+### GitHub Permissions Required
+- `contents: write` - For test file commits
+- `issues: write` - For comments and labels
+- `pull-requests: write` - For review PR creation
+- `id-token: write` - For OIDC authentication
+
+## Test File Placement Strategy
+
+### Option 1: Adjacent to Source
+```
+src/lib/validation.ts
+src/lib/validation.ts.test.ts
+```
+
+### Option 2: Dedicated Test Directory
+```
+tests/unit/{method_name}.spec.ts
+```
+
+Choose based on project conventions detected in codebase.
+
+## Error Handling Patterns
+
+### Invalid Request Flow
+1. Validation fails (missing required fields)
+2. Comment on issue with format requirements
+3. Remove `test-request` label
+4. Exit workflow gracefully
+5. No Jira ticket created
+
+### Valid Request Flow
+1. Extraction succeeds
+2. Create Jira LLTC ticket
+3. Comment with Jira link and next steps
+4. Trigger test generation workflow
+5. Apply progress labels
+
+## Best Practices
+
+### Issue Template Usage
+Provide issue templates matching required format to reduce validation failures.
+
+### Context Quality
+More detailed "Additional Context" → Better test coverage from AI generation.
+
+### Naming Conventions
+- Consistent file paths (absolute or workspace-relative)
+- Clear method names for easy tracking
+- Descriptive issue titles
+
+### Workflow Monitoring
+- Check workflow logs for extraction failures
+- Monitor Jira ticket creation success rate
+- Track test generation completion
+- Review branch merge velocity
+
+## Aviation Safety Considerations
+
+### AI Usage Boundaries
+- ✅ **Approved**: AI-assisted test generation
+- ✅ **Approved**: Code coverage analysis
+- ✅ **Approved**: Test case suggestions
+- ❌ **Not Approved**: Unsupervised AI test merging
+- ❌ **Not Approved**: Skipping human review
+- ❌ **Not Approved**: Direct-to-production deployment
+
+### Audit Trail
+Every test generation must have:
+1. GitHub issue with original request
+2. Jira LLTC ticket with requirements
+3. Test file with traceability comments
+4. Review approval in PR history
+5. Coverage report proving targets met
+
+### Compliance Documentation
+Store workflow artifacts for certification audits:
+- Issue/PR history demonstrating review process
+- Test coverage reports
+- Traceability matrix linking tests to requirements
+- Review sign-off records
+
+## Troubleshooting
+
+### Common Issues
+
+**Extraction Failures**
+- Verify issue format matches required structure
+- Check for proper code fence markers (```)
+- Ensure "File:" line is present and properly formatted
+
+**Jira Creation Failures**
+- Validate Anthropic API key is set
+- Confirm Atlassian credentials are configured
+- Check MCP server connectivity
+- Verify user has project create permissions
+
+**Workflow Dispatch Failures**
+- Confirm `claude-test-generator.yml` exists
+- Verify workflow input parameter names match
+- Check GitHub token permissions are sufficient
+
+**Missing Comments/Labels**
+- Verify GitHub token has issues:write permission
+- Check for API rate limiting
+- Confirm issue number is valid
+
+## Related Workflows
+- `claude-test-generator.yml` - Generates actual test code
+- `test-review-enforcement.yml` - Enforces human review requirements
+- `ci.yml` - Runs tests and validates coverage

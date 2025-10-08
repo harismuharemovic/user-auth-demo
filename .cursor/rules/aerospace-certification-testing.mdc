@@ -1,0 +1,219 @@
+---
+description: Testing patterns for DO-178C aerospace software certification, covering test case types, traceability, and compliance requirements
+alwaysApply: false
+---
+
+# Aerospace Certification Testing Essentials
+
+## Core Test Types
+- **LLTC (Low Level Test Cases)**: Validate low-level requirements (LLRs) through executable test code that exercises specific source code functions and logic paths
+- **HLTC (High Level Test Cases)**: Validate high-level requirements (HLRs) through integration and system-level test scenarios that verify end-to-end behaviors
+- **Test Documentation**: Formal artifacts documenting test procedures, expected results, actual results, and traceability to requirements
+- **Test Traceability**: Bidirectional links between test cases and requirements (LLR↔LLTC, HLR↔HLTC, LLR↔HLTC) to demonstrate complete coverage
+
+## Critical Testing Principles
+- **Requirements-Driven Testing**: Every test case must trace to one or more requirements; every requirement must be covered by test cases
+- **Formal Review Process**: All test artifacts undergo formal review against checklists before acceptance
+- **Human-in-the-Loop**: AI-generated tests require human validation and approval at formal checkpoints
+- **Audit Readiness**: Test evidence, logs, and traceability must support certification audits (DO-178C, DO-326A)
+- **Defect Detection**: Tests must detect defects early to reduce late-stage audit findings and rework cycles
+
+## Test Lifecycle Activities
+- **Test Creation**: Generate test source code, expected results, and initial trace links
+- **Test Documentation**: Produce formal test artifacts from test source code
+- **Test Review**: Perform informal and formal reviews using certification checklists
+- **Test Modification**: Update tests when source code or requirements change
+- **Test Execution Analysis**: Analyze test results and failures to identify root causes
+
+---
+
+## Test Types & Levels
+
+### Low Level Test Cases (LLTC)
+- **Purpose**: Validate LLRs at the unit/function level
+- **Scope**: Individual functions, modules, or closely-related code units
+- **Artifacts**:
+  - LLTC source code (executable test implementation)
+  - LLTC documentation (formal test case description)
+  - Expected results log
+  - LLTC-to-LLR trace links
+- **Coverage Target**: Structural coverage per DO-178C objectives (statement, branch, MC/DC depending on software level)
+- **Creation Approach**: Can be AI-generated from LLRs and source code with human review
+
+### High Level Test Cases (HLTC)
+- **Purpose**: Validate HLRs and derived requirements at integration/system level
+- **Scope**: End-to-end scenarios, multi-component interactions, system behaviors
+- **Artifacts**:
+  - HLTC source code (executable test implementation)
+  - HLTC documentation (formal test case description)
+  - Expected results log
+  - HLTC-to-HLR trace links
+  - HLTC-to-LLR trace links (when testing derived requirements)
+- **Coverage Target**: Requirements-based testing ensuring all HLRs are verified
+- **Creation Approach**: Can be AI-generated with trace links, requires human validation
+
+---
+
+## Test Activities & Workflows
+
+### Test Creation Activities
+1. **LLTC Creation**:
+   - Generate LLTC source code based on LLRs and corresponding source code
+   - Establish LLTC-to-LLR traceability automatically
+   - Produce expected results based on requirement specifications
+   - Validate structural coverage objectives are met
+
+2. **HLTC Creation**:
+   - Generate HLTC source code from HLRs and system architecture
+   - Create trace links to HLRs and related LLRs
+   - Define test scenarios covering normal and abnormal conditions
+   - Document expected system behaviors and outcomes
+
+### Test Documentation Activities
+- **LLTC Documentation**: Create formal test artifact from LLTC source code (excluding source generation, expected results, and trace links which must exist beforehand)
+- **HLTC Documentation**: Create formal test artifact from HLTC source code (excluding source generation, expected results, and trace links which must exist beforehand)
+- **Traceability Documentation**: Maintain bidirectional trace matrices showing requirement-to-test and test-to-requirement relationships
+
+### Test Review Activities
+- **LLTC Informal Review**: Evaluate LLTC against formal review checklist before submission
+- **HLTC Informal Review**: Evaluate HLTC against formal review checklist before submission
+- **Review Checklist Items**:
+  - Correct and complete traceability to requirements
+  - Test adequacy for requirement validation
+  - Expected results properly defined
+  - Test independence and repeatability
+  - Compliance with coding standards
+  - Coverage objectives addressed
+
+### Test Modification Activities
+- **LLTC Modification from Code Change**: Update LLTC when prototype source code changes
+- **HLTC Modification from Code Change**: Update HLTC when prototype source code changes
+- **Impact Analysis**: Determine which tests require updates when requirements or code change
+- **Regression Testing**: Re-execute affected tests to verify changes don't introduce defects
+
+### Test Execution & Analysis Activities
+- **Automated Log/Result Analysis**: Analyze test failures to provide explanations and assist with debugging
+- **Test Result Documentation**: Record actual results for comparison with expected results
+- **Coverage Analysis**: Measure achieved structural coverage and identify gaps
+- **Defect Tracking**: Link test failures to defect reports and change requests
+
+---
+
+## Test Traceability Requirements
+
+### Trace Link Types
+1. **LLR-to-LLTC**: Each LLR must be traced to one or more LLTCs that validate it
+2. **HLR-to-HLTC**: Each HLR must be traced to one or more HLTCs that verify it
+3. **LLR-to-HLTC**: Derived requirements (LLRs) may be traced to HLTCs for integration validation
+4. **LLR-to-SLOC**: LLRs trace to specific source lines of code (functions/LOC) they describe
+5. **LLR-to-HLR**: LLRs trace upstream to parent HLRs they decompose or derive from
+
+### Traceability Objectives
+- **Completeness**: No orphaned requirements (requirements without tests) or orphaned tests (tests without requirements)
+- **Correctness**: Trace links accurately reflect validation relationships
+- **Bidirectionality**: Traceability works in both directions (requirement→test and test→requirement)
+- **Automation Coverage**: Target 70% of trace links suggested automatically with <10% false positives
+- **Audit Support**: Traceability evidence must satisfy certification audits
+
+### Traceability Tools & Processes
+- **LLR to TC Trace**: Generate LLR-to-LLTC/HLTC trace suggestions for untraced LLRs
+- **Trace Validation**: Human review of AI-generated trace suggestions for accuracy
+- **Trace Maintenance**: Update trace links when requirements, code, or tests change
+- **Trace Reporting**: Generate trace matrices for review and audit evidence
+
+---
+
+## Test Review & Quality Assurance
+
+### Review Objectives
+- **Reduce First-Round Review Failures**:
+  - Target 20-35% reduction in TC first-round review failures
+  - Catch issues before formal review through informal AI-assisted pre-checks
+  - Improve test quality to accelerate certification progress
+
+### Review Process
+1. **Informal Review (AI-Assisted)**:
+   - Run AI-based checklist review before formal submission
+   - Address identified issues proactively
+   - Iterate until informal review passes
+
+2. **Formal Review (Human)**:
+   - Submit test artifacts for peer/expert review
+   - Address formal review comments and change requests
+   - Obtain approval before test execution
+
+### Review Checklist Categories
+- **Traceability Compliance**: All required trace links present and correct
+- **Test Adequacy**: Tests sufficiently validate requirements
+- **Expected Results**: Expected outcomes clearly defined and verifiable
+- **Test Independence**: Tests don't depend on execution order or external state
+- **Coding Standards**: Test code follows company software coding standards
+- **Coverage Objectives**: Tests achieve required structural coverage
+- **Documentation Quality**: Test descriptions clear, complete, and unambiguous
+
+---
+
+## Test Automation Capabilities
+
+### AI-Assisted Test Generation
+- **LLTC Creation**: Automatically generate LLTC source code from LLRs and source code
+- **HLTC Creation**: Automatically generate HLTC source code from HLRs and architecture
+- **Expected Results Generation**: Derive expected test outcomes from requirement specifications
+- **Trace Link Suggestion**: Automatically suggest trace links between tests and requirements
+
+### AI-Assisted Test Quality
+- **Informal Review Automation**: Pre-check tests against formal review checklists
+- **Test Adequacy Analysis**: Assess whether tests sufficiently validate requirements
+- **Coverage Gap Detection**: Identify requirements lacking sufficient test coverage
+- **Defect Prediction**: Flag potential test quality issues before formal review
+
+### AI-Assisted Test Maintenance
+- **Change Impact Analysis**: Identify tests affected by code or requirement changes
+- **Test Update Generation**: Suggest or generate test modifications based on code changes
+- **Regression Test Selection**: Determine minimal test set needed for change validation
+- **Test Failure Analysis**: Provide explanations for test failures to accelerate debugging
+
+### Human-in-the-Loop Checkpoints
+- **Test Acceptance**: Human approval required before tests are formally accepted
+- **Review Validation**: Human validation of AI-generated test quality assessments
+- **Trace Verification**: Human confirmation of AI-suggested trace links
+- **Change Approval**: Human authorization for test modifications
+
+---
+
+## Performance Targets
+
+### Test Creation Velocity
+- **LL TC Authoring**: Target 30-50% increase in authoring velocity
+- **HL TC Authoring**: Target 20-30% increase in authoring velocity
+- **Documentation**: Target 20-30% reduction in documentation time
+
+### Test Review Velocity
+- **LL TC Review**: Target 15-25% increase in reviewing velocity
+- **HL TC Review**: Target 10-20% increase in reviewing velocity
+- **Review Cycle Time**: Target 20-30% reduction in overall test review phase duration
+
+### Test Quality Metrics
+- **Review Pass Rate**: Target 20-35% reduction in first-round test review failures
+- **Trace Accuracy**: Target 70% automation coverage with <10% false positives
+- **Rework Rate**: Target <10% rework rate for AI-generated tests
+- **Response Time**: AI tools must respond in <5 seconds for test queries
+
+---
+
+## Integration Requirements
+
+### Tool Integration Points
+- **Requirements Management**: JIRA, Codebeamer, DOORS (source of requirements for test generation)
+- **Source Control**: GitHub (access to source code for test creation and modification)
+- **Development IDE**: QT, VSCode (test authoring and execution environment)
+- **Test Execution**: Automated test frameworks for LLTC/HLTC execution and log capture
+- **Traceability Tools**: Codebeamer for trace link management and reporting
+
+### Data Requirements
+- **LLRs**: Requirement text, attributes, and existing trace links
+- **HLRs**: High-level requirement specifications and system behaviors
+- **Source Code**: Implementation code that tests must validate
+- **Coding Standards**: Company software coding standards (SCS) for test code compliance
+- **Review Checklists**: Formal review criteria for test quality assessment
+- **Historical Test Data**: Past test cases for learning patterns and best practices

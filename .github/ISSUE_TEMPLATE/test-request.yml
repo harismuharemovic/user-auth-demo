@@ -1,0 +1,167 @@
+name: 🧪 Test Generation Request (LLTC)
+description: Request AI-generated Low Level Test Case (LLTC) for aerospace software certification
+title: "Test Request: [Method Name]"
+labels: ["test-request", "ai-assisted", "lltc"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## DO-178C LLTC Generation Request
+        
+        This form requests automated generation of a Low Level Test Case (LLTC) for aerospace software certification.
+        
+        **Important Notes:**
+        - AI will generate the test based on your input
+        - Generated test will undergo mandatory human review per DO-178C
+        - Test will not be auto-merged - requires qualified engineer approval
+        - Traceability to requirements must be established during review
+        
+        ---
+
+  - type: input
+    id: file_path
+    attributes:
+      label: 📂 File Path
+      description: Full path to the file containing the method/function to test
+      placeholder: "src/lib/validation.ts"
+    validations:
+      required: true
+
+  - type: input
+    id: method_name
+    attributes:
+      label: 🎯 Method/Function Name
+      description: Name of the method or function that needs test coverage
+      placeholder: "validateUserInput"
+    validations:
+      required: true
+
+  - type: textarea
+    id: code_snippet
+    attributes:
+      label: 💻 Code to Test
+      description: Paste the complete method/function implementation. Include the full function body.
+      placeholder: |
+        export function validateUserInput(input: string): boolean {
+          if (!input || input.trim().length === 0) {
+            return false;
+          }
+          
+          if (input.length > 255) {
+            throw new Error('Input too long');
+          }
+          
+          const validPattern = /^[a-zA-Z0-9\s]+$/;
+          return validPattern.test(input);
+        }
+      render: typescript
+    validations:
+      required: true
+
+  - type: dropdown
+    id: test_priority
+    attributes:
+      label: ⚡ Priority
+      description: How urgent is this test?
+      options:
+        - Medium (Normal development)
+        - High (Critical path / Near deadline)
+        - Low (Nice to have)
+    validations:
+      required: true
+
+  - type: textarea
+    id: requirements
+    attributes:
+      label: 📋 Requirements / Context
+      description: |
+        Optional: Provide additional context about what needs to be tested
+        - Low Level Requirements (LLR) IDs this test should trace to
+        - Specific scenarios or edge cases to cover
+        - Known issues or concerns
+        - Expected behavior details
+      placeholder: |
+        LLR-123: Input validation must reject empty strings
+        LLR-124: Input length must not exceed 255 characters
+        LLR-125: Only alphanumeric characters and spaces allowed
+        
+        Edge cases to test:
+        - Empty string
+        - String with only whitespace
+        - String at exact boundary (255 chars)
+        - String with special characters
+        - Null/undefined inputs
+
+  - type: textarea
+    id: coverage_goals
+    attributes:
+      label: 🎯 Coverage Goals
+      description: Specific coverage targets or objectives (optional)
+      placeholder: |
+        - 100% statement coverage
+        - 100% branch coverage
+        - All error paths tested
+        - Boundary conditions covered
+
+  - type: checkboxes
+    id: test_categories
+    attributes:
+      label: ✅ Test Categories Required
+      description: Check all that apply
+      options:
+        - label: Normal/happy path scenarios
+          required: false
+        - label: Edge cases and boundary conditions
+          required: false
+        - label: Error handling / exception cases
+          required: false
+        - label: Input validation scenarios
+          required: false
+        - label: Performance/efficiency tests
+          required: false
+
+  - type: checkboxes
+    id: compliance
+    attributes:
+      label: ⚠️ DO-178C Compliance Acknowledgment
+      description: Please confirm understanding of the review process
+      options:
+        - label: I understand this will be an AI-generated test requiring human review
+          required: true
+        - label: I understand DO-178C compliance requires formal review and approval
+          required: true
+        - label: I will link this test to appropriate LLRs during review
+          required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        
+        ## 🚀 What Happens Next
+        
+        1. **Jira Ticket Created**: A detailed Jira ticket will be automatically created with test specifications
+        2. **AI Generation**: Claude will generate comprehensive LLTC tests based on your code
+        3. **Automated Testing**: Generated tests will be executed automatically
+        4. **PR Creation**: If tests pass, a PR will be created to `to-be-reviewed-tests` branch
+        5. **Human Review**: A qualified test engineer must review and approve the test
+        6. **Integration**: After approval, test becomes part of the certification basis
+        
+        ---
+        
+        ## 📚 Review Checklist (For Reviewers)
+        
+        The generated test will include a comprehensive DO-178C review checklist covering:
+        - Test coverage adequacy
+        - Test quality and correctness
+        - DO-178C LLTC compliance
+        - Traceability requirements
+        - Code quality standards
+        - Aerospace safety standards
+        
+        ---
+        
+        **Questions?** Contact your test lead or certification manager.
+

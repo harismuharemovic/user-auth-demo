@@ -1,0 +1,275 @@
+---
+description: AI-assisted test generation workflow for aviation software with DO-178C compliance
+alwaysApply: false
+---
+
+# AI-Assisted Test Generation - Aviation Compliance
+
+## Core Concept
+- **AI for Testing Only**: AI generates tests (allowed), not production code (restricted) per aerospace regulations
+- **Human-in-the-Loop**: Every AI-generated test requires mandatory qualified engineer review
+- **Full Traceability**: Complete audit trail from request through integration for DO-178C compliance
+- **No Auto-Merge**: AI-generated tests never auto-merge; always require explicit human approval
+- **LLTC Focus**: Low Level Test Cases (unit tests) validating low-level requirements
+
+## Test Request Workflow
+
+### User Initiates Test
+1. **Select code** in editor and copy method/function to test
+2. **Paste in chat** with instruction: "test this method"
+3. **AI creates GitHub issue** automatically with proper formatting
+4. **Claude Code processes** issue and generates comprehensive test
+5. **PR created** to `to-be-reviewed-tests` branch (never to main)
+6. **Human reviews** using DO-178C checklist before approving
+
+### GitHub Issue Format
+- **Label**: `test-request` (triggers workflow)
+- **Required fields**: File path, method name, code snippet
+- **Optional fields**: Test requirements, coverage goals, LLR references
+- **Format**: Structured markdown with code blocks
+
+## Workflow Components
+
+### Test Orchestrator (`test-orchestrator.yml`)
+- **Triggers**: Issue with `test-request` label or `@claude-test` comment
+- **Purpose**: Entry point, parses request, optionally creates Jira ticket
+- **Permissions**: `contents: write`, `issues: write`, `pull-requests: write`, `id-token: write`
+- **Key Actions**: Extract code snippet, validate format, create tracking ticket
+
+### Claude Code Direct Processing
+- **Triggers**: Issue with `test-request` label (via Claude Code GitHub App)
+- **Purpose**: Generate comprehensive LLTC tests using Claude AI
+- **Test Structure**: Vitest framework, organized describe blocks, AAA pattern
+- **Coverage**: Empty inputs, edge cases, boundaries, errors, null/undefined handling
+- **Output**: Creates branch `claude/issue-{N}-{timestamp}` with test file
+
+### Test Review Enforcement (`test-review-enforcement.yml`)
+- **Triggers**: PR to `to-be-reviewed-tests` branch
+- **Purpose**: Enforce mandatory human review
+- **Actions**: Disable auto-merge, post 31-point DO-178C checklist, re-run tests
+- **Safety Rails**: Multiple mechanisms prevent accidental auto-merge
+
+### Modified CI (`ci.yml`)
+- **Purpose**: Exclude AI-generated test PRs from auto-merge
+- **Exclusions**: `test-gen/*` branches, `ai-generated` label, `lltc` label, `do-not-auto-merge` label
+
+## Branch Strategy
+
+### Branch Flow
+- `main`: Production code and approved tests
+- `to-be-reviewed-tests`: Staging area for AI-generated tests (isolated from production)
+- `claude/issue-{N}-{timestamp}`: Individual test generation branches created by Claude Code
+
+### Merge Process
+1. AI generates test → `claude/issue-{N}` branch
+2. PR created → targets `to-be-reviewed-tests`
+3. Human reviews using checklist → approves
+4. Merge to `to-be-reviewed-tests`
+5. Batch merge `to-be-reviewed-tests` → `main` (with additional approval gate)
+
+## DO-178C Compliance Requirements
+
+### Traceability Elements
+- **GitHub Issue**: Requirement source and test request
+- **Jira Ticket** (optional): Formal work item with LLTC specifications
+- **Test File Header**: Includes ticket references, traceability markers, LLR linkage
+- **PR Review**: Qualified engineer approval with documented checklist completion
+- **Git History**: Complete audit trail preserved
+
+### Test File Header Format
+```
+/**
+ * LLTC Test Case - DO-178C Compliance
+ * 
+ * @testType LLTC (Low Level Test Case)
+ * @jiraTicket {TICKET-ID} (if applicable)
+ * @githubIssue #{ISSUE-NUMBER}
+ * @testedFile {file-path}
+ * @testedFunction {function-name}
+ * @generatedBy AI (Claude) - Requires Human Review
+ * @reviewStatus PENDING
+ * @traceability LLR-TBD (to be linked during review)
+ */
+```
+
+### Review Checklist (31 Points)
+- **Test Coverage**: All code paths, branches, edge cases, boundaries (6 checks)
+- **Test Quality**: Assertions valid, mocks accurate, independence, repeatability (8 checks)
+- **DO-178C Compliance**: Traceability, LLR linkage, expected results, formal review (6 checks)
+- **Code Quality**: Coding standards, readability, no smells, types correct (6 checks)
+- **Safety Standards**: Deterministic, no timing dependencies, resource cleanup (5 checks)
+
+## Configuration Requirements
+
+### GitHub Secrets (Required)
+- `ANTHROPIC_API_KEY`: Claude AI API access for test generation
+- `GITHUB_TOKEN`: Automatically provided by GitHub Actions
+
+### GitHub Secrets (Optional for Jira)
+- `ATLASSIAN_USER_EMAIL`: Jira account email
+- `ATLASSIAN_API_TOKEN`: Jira API token
+- `ATLASSIAN_CLOUD_ID`: Atlassian cloud instance ID
+
+### GitHub App Installation
+- **Claude Code GitHub App**: Must be installed on repository for direct processing
+- **Install at**: https://github.com/apps/claude
+- **Permissions**: Read code, create branches, create PRs, comment on issues
+
+### Branch Protection
+- **Branch**: `to-be-reviewed-tests`
+- **Settings**: Require 1+ approvals, require status checks, no force pushes, no deletions
+- **Purpose**: Enforce human review gate before integration
+
+## Test Generation Best Practices
+
+### Test Coverage Targets
+- **Statement Coverage**: 100% of code in tested function
+- **Branch Coverage**: All conditional paths (if/else, switch, ternary)
+- **Edge Cases**: Min, max, zero, empty, null, undefined values
+- **Error Paths**: Exception handling and error conditions
+- **Input Validation**: All validation logic exercised
+
+### Test Organization
+- **Framework**: Vitest for unit tests (detected from project)
+- **Structure**: Organize tests in `describe` blocks by category
+- **Pattern**: AAA (Arrange-Act-Assert) for clarity
+- **Naming**: Descriptive test names explaining what is tested
+- **Independence**: No shared state between tests
+- **Mocking**: Mock external dependencies appropriately
+
+### Generated Test Categories
+- Empty inputs and no-argument cases
+- Single value inputs
+- Multiple value inputs
+- Array and nested array handling
+- Object inputs with conditional logic
+- Complex type merging (e.g., Tailwind class conflicts)
+- Null and undefined handling
+- Edge cases and boundary conditions
+- Performance and consistency verification
+
+## Safety Mechanisms
+
+### Five-Layer Auto-Merge Prevention
+1. **Branch Isolation**: Tests go to `to-be-reviewed-tests`, not `main`
+2. **CI Exclusions**: Auto-merge job skips `test-gen/*` branches
+3. **Label Checks**: Auto-merge skips `ai-generated`, `lltc`, `do-not-auto-merge` labels
+4. **Review Enforcement**: Workflow actively disables auto-merge on test PRs
+5. **Branch Protection**: Requires approvals and status checks when configured
+
+### Audit Trail Preservation
+- All actions logged in GitHub Actions runs
+- PR history maintains review conversations
+- Git commits preserve attribution and timestamps
+- Issue comments document progress and decisions
+- Jira tickets (optional) provide formal work tracking
+
+## Usage Patterns
+
+### Request Test for Function
+1. Open file with function to test
+2. Select entire function including signature
+3. Copy to clipboard
+4. In Claude chat: paste code and say "test this method"
+5. AI creates issue automatically
+6. Wait 1-2 minutes for test generation
+7. Review PR when notified
+
+### Review Generated Test
+1. Receive PR notification with `ai-generated` label
+2. Checkout branch locally: `gh pr checkout {PR-NUMBER}`
+3. Run tests: `npm test`
+4. Review test file against 31-point checklist
+5. Verify coverage: `npm test -- --coverage`
+6. Link to LLRs in traceability system
+7. Approve if all checks pass, request changes if issues found
+
+### Approve and Integrate
+1. Add review approval on GitHub PR
+2. Merge to `to-be-reviewed-tests` branch
+3. Test becomes part of reviewed test suite
+4. Periodically batch merge to `main` with additional approval
+5. Test becomes part of certification basis
+
+## Common Patterns
+
+### Requesting Tests for Multiple Functions
+- Create separate issues for each function (preferred for traceability)
+- Each function gets independent review and approval
+- Maintains clear audit trail per test
+
+### Handling Test Failures
+- AI only creates PR if generated tests pass
+- If tests fail, AI comments on issue with error details
+- Human can either retry generation or fix tests manually
+- Failed branches preserved for debugging
+
+### Updating Generated Tests
+- If changes needed after review, comment on PR
+- Make changes directly on branch or request regeneration
+- Re-run tests to verify fixes
+- Update review status when complete
+
+## Integration Points
+
+### Jira Integration (Optional)
+- Test Orchestrator can create formal Jira LLTC tickets
+- Requires Atlassian MCP server configuration
+- Provides formal work tracking for certification
+- Links GitHub issue to Jira ticket bidirectionally
+
+### Traceability Tool Integration
+- During review, link tests to LLRs in your traceability tool (Codebeamer, DOORS, etc.)
+- Document trace links in PR comments
+- Update test file header with LLR references
+- Maintain bidirectional traceability for audit
+
+### CI/CD Integration
+- Tests automatically run in GitHub Actions on PR
+- Coverage reports generated as artifacts
+- Test results visible in PR status checks
+- Failed tests prevent PR merge
+
+## Metrics and Monitoring
+
+### Track Test Generation Performance
+- Time from issue to PR creation (target: <10 minutes)
+- Test pass rate on first generation (target: >80%)
+- Coverage achievement (target: >95% meeting 100% target)
+
+### Track Review Performance
+- Review time from PR to approval (target: <2 hours)
+- First-time approval rate (target: >70%)
+- Rework rate requiring changes (target: <20%)
+
+### Track Compliance Metrics
+- Traceability completeness: % with full LLR links (target: 100%)
+- Checklist completion: % completing all items (target: 100%)
+- Audit readiness: Time to produce evidence (target: <1 hour)
+
+## Troubleshooting
+
+### Issue Not Triggering Workflow
+- Verify issue has `test-request` label
+- Check required fields present (file path, code in code block)
+- Ensure Claude Code GitHub App installed
+- Check Actions tab for error logs
+
+### Test Generation Failed
+- Review issue comments for error details
+- Common causes: incomplete code, missing dependencies, syntax errors
+- Retry by commenting `@claude-test` on issue
+- Or manually fix on generated branch
+
+### PR Not Created
+- Tests must pass before PR creation (by design)
+- Check if branch created: `git fetch && git branch -r | grep claude`
+- Review workflow logs for test execution output
+- Test failure prevents PR as safety measure
+
+### Auto-Merge Occurred Incorrectly
+- Should not happen due to multiple safety layers
+- If occurs, revert merge immediately
+- Review CI exclusion conditions in `ci.yml`
+- Verify branch protection rules active
+- Report as critical issue for workflow fix

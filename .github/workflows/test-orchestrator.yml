@@ -1,0 +1,69 @@
+name: Test Request Validator
+
+on:
+  issues:
+    types: [opened, labeled]
+
+permissions:
+  issues: write
+
+jobs:
+  validate-request:
+    runs-on: ubuntu-latest
+    if: contains(github.event.issue.labels.*.name, 'test-request')
+
+    steps:
+      - name: Validate Test Request Format
+        id: validate
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: |
+          echo "=== Validating Test Request ==="
+          
+          # Check for file path
+          FILE_PATH=$(echo "$ISSUE_BODY" | grep -i "^File" | head -1)
+          
+          # Check for code snippet
+          HAS_CODE=$(echo "$ISSUE_BODY" | grep -E '```(typescript|javascript|ts|js)' || echo "")
+          
+          if [ -z "$FILE_PATH" ] || [ -z "$HAS_CODE" ]; then
+            echo "valid=false" >> $GITHUB_OUTPUT
+          else
+            echo "valid=true" >> $GITHUB_OUTPUT
+            echo "✅ Valid test request format"
+          fi
+
+      - name: Comment on Invalid Request
+        if: steps.validate.outputs.valid == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment ${{ github.event.issue.number }} --body "### ❌ Invalid Test Request Format
+
+          Required format:
+          \`\`\`
+          File: path/to/file.ts
+
+          \`\`\`typescript
+          export function myFunction() {
+            // code here
+          }
+          \`\`\`
+
+          Additional Context:
+          - Test scenario 1
+          - Test scenario 2
+          \`\`\`
+
+          **Tip**: Use the script: \`./scripts/create-test-request.sh <file> <method> \"context\"\`"
+          
+          gh issue edit ${{ github.event.issue.number }} --remove-label "test-request"
+
+      - name: Add Status Label  
+        if: steps.validate.outputs.valid == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue edit ${{ github.event.issue.number }} --add-label "test-in-progress"
+          echo "✅ Issue labeled - Claude Code will process automatically"
