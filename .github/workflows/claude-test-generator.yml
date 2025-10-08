@@ -1,0 +1,552 @@
+name: Claude Test Generator - LLTC Creation
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "GitHub issue number"
+        required: true
+        type: string
+      jira_key:
+        description: "Jira ticket key"
+        required: true
+        type: string
+      file_path:
+        description: "File path containing method to test"
+        required: true
+        type: string
+      method_name:
+        description: "Method name to test"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  generate-lltc:
+    runs-on: ubuntu-latest
+    environment: Production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Dependencies
+        run: |
+          npm ci
+
+      - name: Configure Git
+        run: |
+          git config user.name "Claude Test Generator"
+          git config user.email "claude-test[bot]@users.noreply.github.com"
+
+      - name: Create Test Generation Branch
+        id: branch
+        run: |
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          BRANCH_NAME="test-gen/${{ inputs.jira_key }}-${{ inputs.method_name }}-${TIMESTAMP}"
+          
+          git checkout -b "$BRANCH_NAME"
+          echo "name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          echo "✅ Created branch: $BRANCH_NAME"
+
+      - name: Get Original Issue Details
+        id: issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get full issue details
+          ISSUE_JSON=$(gh api repos/${{ github.repository }}/issues/${{ inputs.issue_number }})
+          
+          # Extract code snippet from issue body
+          ISSUE_BODY=$(echo "$ISSUE_JSON" | jq -r '.body')
+          
+          # Save to file for Claude to read
+          echo "$ISSUE_BODY" > /tmp/issue_body.txt
+          
+          echo "✅ Retrieved issue #${{ inputs.issue_number }} details"
+
+      - name: Generate LLTC Test with Claude Code
+        id: generate
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          
+          # Use MCP for Atlassian to update Jira ticket status
+          mcp_config: |
+            {
+              "mcpServers": {
+                "atlassian": {
+                  "command": "npx",
+                  "args": ["-y", "@modelcontextprotocol/server-atlassian"]
+                }
+              }
+            }
+          
+          allowed_tools: "Read,Write,Edit,Bash,mcp__atlassian__getJiraIssue,mcp__atlassian__editJiraIssue,mcp__atlassian__addCommentToJiraIssue"
+          
+          direct_prompt: |
+            You are generating a Low Level Test Case (LLTC) for aerospace software certification under DO-178C standards.
+            
+            ## Mission: Generate Comprehensive Unit Test
+            
+            **Jira Ticket:** ${{ inputs.jira_key }}
+            **GitHub Issue:** #${{ inputs.issue_number }}
+            **File to test:** ${{ inputs.file_path }}
+            **Method/Function:** ${{ inputs.method_name }}
+            
+            ## Instructions
+            
+            1. **Read the source file** at `${{ inputs.file_path }}` to understand the method implementation
+            
+            2. **Generate comprehensive LLTC test file** with these requirements:
+            
+            ### Test File Header (MUST INCLUDE):
+            ```typescript
+            /**
+             * LLTC Test Case - DO-178C Compliance
+             * 
+             * @testType LLTC (Low Level Test Case)
+             * @jiraTicket ${{ inputs.jira_key }}
+             * @githubIssue #${{ inputs.issue_number }}
+             * @testedFile ${{ inputs.file_path }}
+             * @testedFunction ${{ inputs.method_name }}
+             * @generatedBy AI (Claude) - Requires Human Review
+             * @reviewStatus PENDING
+             * @traceability LLR-TBD (to be linked during review)
+             * 
+             * Purpose: Validate low-level requirements for ${{ inputs.method_name }}
+             * Coverage Target: 100% statement and branch coverage
+             * 
+             * Test Categories:
+             * - Normal operation / happy path scenarios
+             * - Boundary conditions and edge cases  
+             * - Error handling and exceptional conditions
+             * - Input validation scenarios
+             */
+            ```
+            
+            ### Test Structure:
+            - Use `describe` blocks to organize test categories
+            - Use `test` or `it` for individual test cases
+            - Each test must have clear description
+            - Use `expect` assertions with meaningful messages
+            - Mock external dependencies using vi.mock() or similar
+            - Ensure test independence (no shared state)
+            
+            ### Coverage Requirements:
+            - Test all code paths (branches)
+            - Test boundary values (min, max, zero, null, undefined)
+            - Test error conditions and exceptions
+            - Test input validation logic
+            - Test return values and side effects
+            
+            ### Best Practices:
+            - Follow existing test patterns in the codebase (check tests/ directory)
+            - Use AAA pattern: Arrange, Act, Assert
+            - Keep tests focused and atomic
+            - Use descriptive test names that explain what is being tested
+            - Add comments explaining complex test scenarios
+            
+            3. **Determine test file location:**
+               - Check if source file is in `src/` directory
+               - Place test file either:
+                 - Adjacent: `${{ inputs.file_path }}.test.ts`
+                 - OR in test directory: `tests/unit/${{ inputs.method_name }}.spec.ts`
+               - Follow existing project conventions
+            
+            4. **Create the test file** with all comprehensive test cases
+            
+            5. **DO NOT run the tests yet** - we'll run them in the next step
+            
+            ## Example Test Structure:
+            ```typescript
+            import { describe, it, expect, vi, beforeEach } from 'vitest';
+            import { ${{ inputs.method_name }} } from '${{ inputs.file_path }}';
+            
+            describe('${{ inputs.method_name }} - LLTC', () => {
+              describe('Normal Operation', () => {
+                it('should handle valid input correctly', () => {
+                  // Arrange
+                  const input = 'valid data';
+                  
+                  // Act
+                  const result = ${{ inputs.method_name }}(input);
+                  
+                  // Assert
+                  expect(result).toBeDefined();
+                  expect(result).toEqual(expectedValue);
+                });
+              });
+              
+              describe('Edge Cases', () => {
+                it('should handle empty input', () => {
+                  // Test implementation
+                });
+                
+                it('should handle null input', () => {
+                  // Test implementation
+                });
+              });
+              
+              describe('Error Handling', () => {
+                it('should throw error for invalid input', () => {
+                  // Test implementation
+                });
+              });
+            });
+            ```
+            
+            ## Important Notes:
+            - This is for AVIATION COMPLIANCE - tests must be thorough and traceable
+            - Include Jira ticket reference in file header
+            - Make tests self-documenting
+            - Ensure tests are independent and repeatable
+            - Follow DO-178C LLTC requirements
+            
+            Generate the test file now. Be thorough and comprehensive.
+
+      - name: Run Generated Tests
+        id: test_execution
+        continue-on-error: true
+        run: |
+          echo "=== Running Generated Tests ==="
+          
+          # Run tests with coverage
+          npm test -- --run --coverage 2>&1 | tee /tmp/test_output.txt
+          
+          TEST_EXIT_CODE=${PIPESTATUS[0]}
+          
+          echo "test_exit_code=$TEST_EXIT_CODE" >> $GITHUB_OUTPUT
+          
+          if [ $TEST_EXIT_CODE -eq 0 ]; then
+            echo "✅ All tests passed"
+            echo "test_status=passed" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Tests failed"
+            echo "test_status=failed" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate Test Report
+        id: report
+        run: |
+          echo "=== Test Execution Report ===" > /tmp/test_report.md
+          echo "" >> /tmp/test_report.md
+          echo "**Status:** ${{ steps.test_execution.outputs.test_status }}" >> /tmp/test_report.md
+          echo "**Exit Code:** ${{ steps.test_execution.outputs.test_exit_code }}" >> /tmp/test_report.md
+          echo "" >> /tmp/test_report.md
+          echo "## Test Output" >> /tmp/test_report.md
+          echo "\`\`\`" >> /tmp/test_report.md
+          cat /tmp/test_output.txt >> /tmp/test_report.md
+          echo "\`\`\`" >> /tmp/test_report.md
+          
+          # Check if coverage directory exists
+          if [ -d "coverage" ]; then
+            echo "" >> /tmp/test_report.md
+            echo "## Coverage Report" >> /tmp/test_report.md
+            echo "Coverage data generated. See artifacts." >> /tmp/test_report.md
+          fi
+
+      - name: Commit Test File
+        id: commit
+        if: steps.test_execution.outputs.test_status == 'passed'
+        run: |
+          # Check for changes
+          if [[ -n $(git status -s) ]]; then
+            git add -A
+            
+            COMMIT_MSG="[${{ inputs.jira_key }}] Generate LLTC for ${{ inputs.method_name }}
+
+            - Generated comprehensive unit tests for ${{ inputs.file_path }}
+            - All tests passing
+            - Coverage targets met
+            - Requires human review per DO-178C compliance
+            
+            Jira: ${{ inputs.jira_key }}
+            GitHub Issue: #${{ inputs.issue_number }}
+            
+            ⚠️ AI-GENERATED TEST - REQUIRES MANDATORY HUMAN REVIEW"
+            
+            git commit -m "$COMMIT_MSG"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "✅ Committed test file"
+          else
+            echo "No changes detected"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Push Branch (Tests Passed)
+        if: steps.test_execution.outputs.test_status == 'passed' && steps.commit.outputs.has_changes == 'true'
+        run: |
+          git push -u origin "${{ steps.branch.outputs.name }}"
+          echo "✅ Pushed branch: ${{ steps.branch.outputs.name }}"
+
+      - name: Create Pull Request (Tests Passed)
+        if: steps.test_execution.outputs.test_status == 'passed' && steps.commit.outputs.has_changes == 'true'
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_TITLE="[${{ inputs.jira_key }}] LLTC: ${{ inputs.method_name }} - ⚠️ REQUIRES HUMAN REVIEW"
+          
+          cat > /tmp/pr_body.md << 'EOF'
+          ## ⚠️ AI-Generated Test - DO-178C Compliance Review Required
+          
+          **This is an AI-generated Low Level Test Case (LLTC) for aerospace software certification.**
+          **Human review and approval is MANDATORY before merging per DO-178C standards.**
+          
+          ---
+          
+          ### 📋 Test Information
+          - **Type:** LLTC (Low Level Test Case)
+          - **Jira Ticket:** [${{ inputs.jira_key }}](https://haris-muharemovic.atlassian.net/browse/${{ inputs.jira_key }})
+          - **GitHub Issue:** #${{ inputs.issue_number }}
+          - **Tested File:** `${{ inputs.file_path }}`
+          - **Tested Function:** `${{ inputs.method_name }}`
+          - **Generated By:** Claude AI (Anthropic)
+          - **Test Status:** ✅ All tests passing
+          
+          ---
+          
+          ### ✅ Automated Checks Passed
+          - [x] Test file generated successfully
+          - [x] All test cases pass
+          - [x] No compilation errors
+          - [x] Test framework integration verified
+          
+          ---
+          
+          ### 🔍 Required Human Review Checklist (DO-178C)
+          
+          **Test Adequacy:**
+          - [ ] Test coverage is comprehensive for the target method
+          - [ ] All code paths (branches) are tested
+          - [ ] Edge cases and boundary conditions are covered
+          - [ ] Error handling scenarios are tested
+          - [ ] Input validation is thoroughly tested
+          
+          **Test Quality:**
+          - [ ] Mock behavior accurately represents real dependencies
+          - [ ] Assertions are meaningful and validate correct behavior
+          - [ ] Test cases are independent and repeatable
+          - [ ] Tests follow AAA pattern (Arrange, Act, Assert)
+          - [ ] Test descriptions are clear and self-documenting
+          
+          **DO-178C Compliance:**
+          - [ ] Traceability to requirements established (LLR linkage)
+          - [ ] Test meets LLTC requirements for certification
+          - [ ] Test code follows company software coding standards
+          - [ ] Expected results are clearly defined
+          - [ ] Test is maintainable and understandable
+          
+          **Aerospace Standards:**
+          - [ ] No safety-critical logic flaws in test implementation
+          - [ ] Test does not introduce false positives/negatives
+          - [ ] Coverage objectives met (statement/branch/MC/DC as required)
+          - [ ] Test execution is deterministic
+          
+          ---
+          
+          ### 📊 Test Execution Report
+          
+          $(cat /tmp/test_report.md)
+          
+          ---
+          
+          ### 🚫 DO NOT Auto-Merge
+          This PR targets the `to-be-reviewed-tests` branch and requires:
+          1. Manual code review by qualified test engineer
+          2. Verification against DO-178C LLTC requirements
+          3. Explicit approval before merge
+          
+          ---
+          
+          ### 🔄 Review Process
+          1. **Reviewer:** Examine test code and checklist above
+          2. **Reviewer:** Verify tests execute correctly in your environment
+          3. **Reviewer:** Link test to LLR in traceability system
+          4. **Reviewer:** Approve PR only if all checklist items pass
+          5. **After Merge:** Test becomes part of certification basis
+          
+          ---
+          
+          *Generated by Claude Test Generator - Aviation Certification Pipeline*
+          *Compliant with DO-178C § 6.4 Software Testing Process*
+          EOF
+          
+          # Create PR targeting to-be-reviewed-tests branch
+          gh pr create \
+            --title "$PR_TITLE" \
+            --body-file /tmp/pr_body.md \
+            --base to-be-reviewed-tests \
+            --head "${{ steps.branch.outputs.name }}" \
+            --label "ai-generated" \
+            --label "lltc" \
+            --label "test" \
+            --label "requires-review" \
+            --label "do-not-auto-merge"
+          
+          # Get PR number
+          PR_NUMBER=$(gh pr view "${{ steps.branch.outputs.name }}" --json number -q .number)
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          
+          echo "✅ Created PR #${PR_NUMBER}"
+
+      - name: Update Jira Ticket (Success)
+        if: steps.test_execution.outputs.test_status == 'passed' && steps.commit.outputs.has_changes == 'true'
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          
+          mcp_config: |
+            {
+              "mcpServers": {
+                "atlassian": {
+                  "command": "npx",
+                  "args": ["-y", "@modelcontextprotocol/server-atlassian"]
+                }
+              }
+            }
+          
+          allowed_tools: "mcp__atlassian__addCommentToJiraIssue,mcp__atlassian__transitionJiraIssue"
+          
+          direct_prompt: |
+            Update Jira ticket ${{ inputs.jira_key }}:
+            
+            1. Add this comment:
+            ```
+            LLTC Test Generation Complete ✅
+            
+            The unit test has been generated and all tests are passing.
+            
+            Pull Request: [Link to PR]
+            Branch: ${{ steps.branch.outputs.name }}
+            Test Status: All tests passing
+            
+            Next Step: Human review required per DO-178C compliance.
+            The PR has been created targeting the to-be-reviewed-tests branch and requires approval from a qualified test engineer.
+            
+            Review Checklist:
+            - Test coverage adequacy
+            - Test quality and accuracy
+            - DO-178C LLTC compliance
+            - Traceability to requirements
+            ```
+            
+            2. Try to transition the ticket to "In Review" status (or similar review state if available)
+
+      - name: Comment on GitHub Issue (Success)
+        if: steps.test_execution.outputs.test_status == 'passed' && steps.commit.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment ${{ inputs.issue_number }} --body "### ✅ LLTC Test Generation Complete
+
+          **Status:** All tests passing ✨
+
+          **Pull Request Created:** #${{ steps.pr.outputs.pr_number }}
+          - **Target Branch:** \`to-be-reviewed-tests\`
+          - **Test File:** Generated and committed
+          - **Test Status:** ✅ All tests passing
+          - **Coverage:** Test coverage generated
+
+          **Next Steps:**
+          1. 👀 Review the generated test code in PR #${{ steps.pr.outputs.pr_number }}
+          2. ✅ Complete the DO-178C compliance checklist
+          3. 🔗 Link test to LLR in traceability system
+          4. ✔️ Approve PR if review is satisfactory
+          5. 🎯 Merge to \`to-be-reviewed-tests\` branch
+
+          **⚠️ DO-178C Compliance Notice:**
+          This AI-generated test requires mandatory human review by a qualified test engineer before it can be merged. Review must verify test adequacy, accuracy, and compliance with LLTC requirements.
+
+          ---
+          *Aviation Certification Pipeline - Test Generation Complete*"
+
+      - name: Comment on GitHub Issue (Test Failure)
+        if: steps.test_execution.outputs.test_status == 'failed'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment ${{ inputs.issue_number }} --body "### ❌ Test Generation Failed
+
+          The generated tests did not pass execution. This may indicate:
+          - Missing dependencies or imports
+          - Incorrect mock configuration
+          - Test logic errors
+          - Environmental issues
+
+          **Test Output:**
+          \`\`\`
+          $(cat /tmp/test_output.txt | head -50)
+          \`\`\`
+
+          **Next Steps:**
+          1. Review the test output above
+          2. Comment on this issue with \`@claude-test retry\` to regenerate
+          3. Or manually review and fix the generated test code
+
+          The branch \`${{ steps.branch.outputs.name }}\` has been created with the test file if you want to examine or fix it manually.
+
+          ---
+          *Aviation Certification Pipeline - Test Generation Failed*"
+
+      - name: Update Jira Ticket (Failure)
+        if: steps.test_execution.outputs.test_status == 'failed'
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          
+          mcp_config: |
+            {
+              "mcpServers": {
+                "atlassian": {
+                  "command": "npx",
+                  "args": ["-y", "@modelcontextprotocol/server-atlassian"]
+                }
+              }
+            }
+          
+          allowed_tools: "mcp__atlassian__addCommentToJiraIssue"
+          
+          direct_prompt: |
+            Add a comment to Jira ticket ${{ inputs.jira_key }}:
+            
+            ```
+            Test Generation Failed ❌
+            
+            The automated test generation completed, but the generated tests did not pass execution.
+            
+            Branch: ${{ steps.branch.outputs.name }}
+            Status: Tests failing
+            
+            Issue: Further investigation needed. Check GitHub issue #${{ inputs.issue_number }} for test output and error details.
+            
+            Actions:
+            - Review test output logs
+            - Manual intervention may be required
+            - Can retry automated generation
+            ```
+
+      - name: Upload Test Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-generation-artifacts
+          path: |
+            /tmp/test_output.txt
+            /tmp/test_report.md
+            coverage/
+          retention-days: 30
+

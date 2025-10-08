@@ -1,0 +1,284 @@
+name: Test Orchestrator - LLTC Generation Pipeline
+
+on:
+  issues:
+    types: [opened, labeled]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  orchestrate-test-generation:
+    runs-on: ubuntu-latest
+    # Only run for issues with test-request label or @claude-test mention
+    if: |
+      (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'test-request')) ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude-test'))
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Extract Test Request Details
+        id: extract
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: |
+          echo "=== Extracting Test Request Details ==="
+          
+          # Extract file path (look for "File:" or "File Path:" line)
+          FILE_PATH=$(echo "$ISSUE_BODY" | grep -i "^File" | sed 's/^File[^:]*:[[:space:]]*//' | head -1)
+          
+          # Extract method name from title or body
+          METHOD_NAME=$(echo "$ISSUE_TITLE" | sed 's/.*Test Request: //' | sed 's/[[:space:]].*//')
+          
+          # Extract code snippet (content between ```typescript and ``` or ```javascript and ```)
+          CODE_SNIPPET=$(echo "$ISSUE_BODY" | sed -n '/```typescript/,/```/p' | sed '1d;$d')
+          if [ -z "$CODE_SNIPPET" ]; then
+            CODE_SNIPPET=$(echo "$ISSUE_BODY" | sed -n '/```javascript/,/```/p' | sed '1d;$d')
+          fi
+          if [ -z "$CODE_SNIPPET" ]; then
+            CODE_SNIPPET=$(echo "$ISSUE_BODY" | sed -n '/```ts/,/```/p' | sed '1d;$d')
+          fi
+          if [ -z "$CODE_SNIPPET" ]; then
+            CODE_SNIPPET=$(echo "$ISSUE_BODY" | sed -n '/```js/,/```/p' | sed '1d;$d')
+          fi
+          
+          # Extract additional context
+          ADDITIONAL_CONTEXT=$(echo "$ISSUE_BODY" | sed -n '/Additional Context:/,/```/p' | sed '1d;$d' | head -20)
+          
+          # Validation
+          if [ -z "$FILE_PATH" ] || [ -z "$CODE_SNIPPET" ]; then
+            echo "❌ Missing required information (file path or code snippet)"
+            echo "valid=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Save outputs
+          echo "file_path=$FILE_PATH" >> $GITHUB_OUTPUT
+          echo "method_name=$METHOD_NAME" >> $GITHUB_OUTPUT
+          echo "valid=true" >> $GITHUB_OUTPUT
+          
+          # Save code snippet and context to files
+          echo "$CODE_SNIPPET" > /tmp/code_snippet.txt
+          echo "$ADDITIONAL_CONTEXT" > /tmp/additional_context.txt
+          
+          echo "✅ Extracted file path: $FILE_PATH"
+          echo "✅ Extracted method name: $METHOD_NAME"
+          echo "✅ Extracted code snippet (${#CODE_SNIPPET} chars)"
+
+      - name: Comment on Invalid Request
+        if: steps.extract.outputs.valid == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment ${{ github.event.issue.number }} --body "### ❌ Invalid Test Request
+
+          Your test request is missing required information. Please ensure your issue includes:
+
+          1. **File Path**: The file containing the method to test
+             \`\`\`
+             File: src/lib/validation.ts
+             \`\`\`
+
+          2. **Code Snippet**: The method to test in a code block
+             \`\`\`typescript
+             export function validateInput(input: string) {
+               // ... your code
+             }
+             \`\`\`
+
+          3. **Optional**: Additional test scenarios or context
+
+          Please update the issue and add the \`test-request\` label again."
+
+          gh issue edit ${{ github.event.issue.number }} --remove-label "test-request"
+
+      - name: Create Jira LLTC Ticket
+        if: steps.extract.outputs.valid == 'true'
+        id: jira
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          
+          mcp_config: |
+            {
+              "mcpServers": {
+                "atlassian": {
+                  "command": "npx",
+                  "args": ["-y", "@modelcontextprotocol/server-atlassian"]
+                }
+              }
+            }
+          
+          allowed_tools: "mcp__atlassian__createJiraIssue,mcp__atlassian__getVisibleJiraProjects,mcp__atlassian__getJiraProjectIssueTypesMetadata"
+          
+          direct_prompt: |
+            You are creating a Jira ticket for LLTC (Low Level Test Case) generation as part of DO-178C aerospace certification testing.
+            
+            **Context from GitHub Issue #${{ github.event.issue.number }}:**
+            - File to test: ${{ steps.extract.outputs.file_path }}
+            - Method: ${{ steps.extract.outputs.method_name }}
+            - GitHub Issue URL: ${{ github.event.issue.html_url }}
+            
+            **Code to test:**
+            $(cat /tmp/code_snippet.txt)
+            
+            **Additional context:**
+            $(cat /tmp/additional_context.txt)
+            
+            **Your task:**
+            1. Get the user's Atlassian cloud ID (site URL)
+            2. Get visible Jira projects where you have create permission
+            3. Create a detailed Jira ticket with these specifications:
+            
+            **Ticket Title:** [LLTC] Unit test for ${{ steps.extract.outputs.method_name }} in ${{ steps.extract.outputs.file_path }}
+            
+            **Ticket Description (in Markdown):**
+            ```markdown
+            # LLTC Generation Request - DO-178C Compliance
+            
+            ## Source Information
+            - **GitHub Issue:** ${{ github.event.issue.html_url }}
+            - **File Path:** ${{ steps.extract.outputs.file_path }}
+            - **Method/Function:** ${{ steps.extract.outputs.method_name }}
+            
+            ## Code to Test
+            [Include the code snippet from /tmp/code_snippet.txt]
+            
+            ## Test Requirements
+            
+            ### Test Type
+            - **LLTC (Low Level Test Case)** - Unit test level
+            - **Purpose:** Validate low-level requirements through executable test code
+            
+            ### Test Coverage Requirements
+            - ✅ Normal/happy path cases
+            - ✅ Edge cases and boundary conditions
+            - ✅ Error handling and exceptional conditions
+            - ✅ Input validation scenarios
+            - ✅ Target: 100% statement and branch coverage
+            
+            ### Test Framework
+            - Use existing test framework (Vitest detected in project)
+            - Follow project's test file naming conventions
+            - Mock external dependencies appropriately
+            
+            ### DO-178C Compliance Requirements
+            - **Traceability:** Include Jira ticket ID in test file header comments
+            - **Documentation:** Tests must be self-documenting with clear descriptions
+            - **Independence:** Tests must be independent and repeatable
+            - **Expected Results:** Each test must have clearly defined expected outcomes
+            
+            ### Test File Location
+            - Create test file adjacent to source: ${{ steps.extract.outputs.file_path }}.test.ts
+            - OR place in test directory: tests/unit/${{ steps.extract.outputs.method_name }}.spec.ts
+            
+            ### Additional Context
+            [Include additional context from /tmp/additional_context.txt if provided]
+            
+            ## Acceptance Criteria
+            - [ ] Test file created with comprehensive test cases
+            - [ ] All tests pass successfully
+            - [ ] Code coverage meets 100% target for tested method
+            - [ ] Tests follow DO-178C traceability requirements
+            - [ ] Tests are independent and repeatable
+            - [ ] Test code follows project coding standards
+            
+            ## AI Generation Notice
+            ⚠️ **AVIATION COMPLIANCE:** This test will be AI-generated and MUST undergo human review before integration. AI is approved for testing assistance in this aerospace project per DO-178C guidelines, but human validation is mandatory.
+            
+            ## Review Checklist (for human reviewer)
+            - [ ] Test coverage is comprehensive
+            - [ ] Edge cases are properly tested
+            - [ ] Mock behavior is accurate
+            - [ ] Assertions are meaningful and correct
+            - [ ] Complies with DO-178C LLTC requirements
+            - [ ] Traceability to requirements established
+            - [ ] Test is maintainable and understandable
+            - [ ] Test code follows company coding standards
+            ```
+            
+            **Labels to add:** 
+            - "ai-generated-test"
+            - "lltc"
+            - "requires-review"
+            
+            **Priority:** Medium or High (based on project settings)
+            
+            After creating the ticket, output the Jira ticket key (e.g., PROJ-123) and URL so it can be saved.
+
+      - name: Extract Jira Ticket Details
+        if: steps.extract.outputs.valid == 'true'
+        id: jira_details
+        run: |
+          # Parse Claude's output to find Jira ticket key
+          # This is a simplified extraction - adjust based on actual Claude output
+          echo "Checking for Jira ticket creation..."
+          
+          # For now, set placeholder - in real scenario, parse from Claude output
+          # The actual ticket key will be in the Claude action output
+          echo "jira_key=GENERATED" >> $GITHUB_OUTPUT
+          echo "jira_url=https://haris-muharemovic.atlassian.net/browse/GENERATED" >> $GITHUB_OUTPUT
+
+      - name: Comment on GitHub Issue with Jira Link
+        if: steps.extract.outputs.valid == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment ${{ github.event.issue.number }} --body "### ✅ LLTC Test Generation Initiated
+
+          **Jira Ticket Created:** [View Ticket](https://haris-muharemovic.atlassian.net/browse/${{ steps.jira_details.outputs.jira_key }})
+
+          **Next Steps:**
+          1. ⏳ Claude Code is now generating the unit test
+          2. 🧪 Tests will be executed automatically
+          3. ✅ If tests pass, a PR will be created to \`to-be-reviewed-tests\` branch
+          4. 👀 Human review required before merge (DO-178C compliance)
+
+          **DO-178C Compliance:** This is an AI-generated test and requires mandatory human review per aerospace certification standards.
+
+          ---
+          *Automated by Test Orchestrator - Aviation Certification Pipeline*"
+          
+          # Update Jira URL in comment
+          gh issue comment ${{ github.event.issue.number }} --edit-last | sed 's|your-domain.atlassian.net|haris-muharemovic.atlassian.net|g' || true
+
+      - name: Trigger Test Generation Workflow
+        if: steps.extract.outputs.valid == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Create a trigger file or use workflow_dispatch to start test generation
+          # Pass necessary context via workflow dispatch
+          
+          gh workflow run claude-test-generator.yml \
+            -f issue_number="${{ github.event.issue.number }}" \
+            -f jira_key="${{ steps.jira_details.outputs.jira_key }}" \
+            -f file_path="${{ steps.extract.outputs.file_path }}" \
+            -f method_name="${{ steps.extract.outputs.method_name }}"
+
+      - name: Label Issue
+        if: steps.extract.outputs.valid == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue edit ${{ github.event.issue.number }} \
+            --add-label "test-in-progress" \
+            --add-label "ai-generated"
+
