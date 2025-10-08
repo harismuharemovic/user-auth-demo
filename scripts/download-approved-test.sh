@@ -24,24 +24,40 @@ echo "Repository: $REPO"
 # Find the workflow run for this issue
 echo "🔍 Finding workflow run for issue #$ISSUE_NUMBER..."
 
-# Get branch name pattern
-BRANCH_PATTERN="claude/issue-${ISSUE_NUMBER}"
+# Get branch name pattern - Claude branches have timestamps like claude/issue-18-20251008-1242
+# We'll search for any branch matching claude/issue-{N}
+BRANCH_PATTERN="claude/issue-${ISSUE_NUMBER}-"
 
-# Find the most recent successful workflow run for this branch
+# Find the most recent workflow run for this branch that has completed
+# We need to find the exact branch name first
+EXACT_BRANCH=$(gh run list \
+    --workflow=iterative-test-generation.yml \
+    --limit 20 \
+    --json headBranch \
+    --jq '.[] | .headBranch' | grep "claude/issue-${ISSUE_NUMBER}-" | head -1)
+
+if [ -z "$EXACT_BRANCH" ]; then
+    echo "❌ No workflow runs found for issue #$ISSUE_NUMBER"
+    exit 1
+fi
+
+echo "Found branch: $EXACT_BRANCH"
+
+# Find the most recent completed workflow run for this exact branch
 WORKFLOW_RUN=$(gh run list \
     --workflow=iterative-test-generation.yml \
-    --branch "$BRANCH_PATTERN" \
-    --status success \
+    --branch "$EXACT_BRANCH" \
+    --status completed \
     --limit 1 \
     --json databaseId,conclusion,headBranch \
     --jq '.[0]')
 
 if [ -z "$WORKFLOW_RUN" ] || [ "$WORKFLOW_RUN" = "null" ]; then
-    echo "❌ No successful workflow run found for issue #$ISSUE_NUMBER"
+    echo "❌ No completed workflow run found for issue #$ISSUE_NUMBER"
     echo "   Branch pattern: $BRANCH_PATTERN"
     echo ""
     echo "Possible reasons:"
-    echo "  - Tests haven't passed yet"
+    echo "  - Tests haven't run yet"
     echo "  - Wrong issue number"
     echo "  - Workflow is still running"
     echo ""
