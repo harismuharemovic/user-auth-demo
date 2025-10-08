@@ -411,30 +411,40 @@ jobs:
           ATTEMPT="${{ needs.extract-metadata.outputs.attempt_number }}"
           REMAINING=$((3 - ATTEMPT))
           
-          # Post comment to trigger Claude
-          gh issue comment "$ISSUE_NUM" --body "@claude 
-
-          🔄 **Auto-Retry Triggered (Attempt $((ATTEMPT + 1))/3)**
-
-          The previous test generation attempt failed validation. A RETRY_FEEDBACK.md file has been committed to the branch with detailed failure information.
-
-          **Please:**
-          1. Read the RETRY_FEEDBACK.md file in the repository root
-          2. Review the specific test cases that failed
-          3. Regenerate the test file with corrected assertions
-          4. Use the EXACT expected outputs from the I/O specification table
-
-          **CRITICAL - Write NORMAL Tests Only:**
-          - Your tests MUST call the actual function: \`const result = functionName(a, b, c)\`
-          - Then assert: \`expect(result).toBe(expectedValue)\`
-          - DO NOT use workarounds like \`expect(26).toBe(26)\`
-          - DO NOT try to manipulate strings or use creative logic to make assertions pass
-          - Write standard, conventional tests as you would in production
-          - If the tests fail, that's EXPECTED and OKAY - just write normal tests
-
-          **Important:** The feedback file shows what your tests returned vs. what was expected. Update your assertions to match the expected values exactly, but keep using the standard testing pattern of calling the function and asserting on the result.
+          # Post comment to trigger Claude - be VERY explicit about the task
+          TEST_FILE="${{ needs.run-tests-and-validate.outputs.test_file }}"
           
-          You have $REMAINING attempt(s) remaining after this one."
+          gh issue comment "$ISSUE_NUM" --body "@claude Fix the failing tests based on validation feedback.
+
+          **TASK:** Modify the test file at \`$TEST_FILE\` to fix the failing test cases.
+
+          **RETRY ATTEMPT:** $((ATTEMPT + 1))/3
+
+          **WHAT FAILED:**
+          See the RETRY_FEEDBACK.md file in the repository root for detailed validation errors.
+
+          **WHAT TO DO:**
+          1. Open and read \`RETRY_FEEDBACK.md\` - it shows which test cases failed and why
+          2. Open the test file at \`$TEST_FILE\`
+          3. For each failed test case (TC-XXX), update the assertion to use the EXACT expected output from the GitHub issue I/O table
+          4. Keep the standard test pattern: \`const result = functionName(...); expect(result).toBe(expectedValue);\`
+          5. Commit your changes to this branch
+
+          **CRITICAL CONSTRAINTS:**
+          - Write NORMAL tests: \`const result = functionName(inputs); expect(result).toBe(expected);\`
+          - DO NOT use workarounds like \`expect(26).toBe(26)\` without calling the function
+          - Use ONLY the expected values from the I/O specification table in the GitHub issue
+          - If tests fail after your changes, that's OK - just write standard tests
+
+          **EXAMPLE FIX:**
+          If RETRY_FEEDBACK.md shows TC-001 failed because it expected 26 but got 14, update:
+          \`\`\`typescript
+          // Change the assertion value to 26 (from the I/O table)
+          const result = functionName(10, 3, 2);
+          expect(result).toBe(26);  // Use spec value, even if mathematically wrong
+          \`\`\`
+
+          You have $REMAINING attempt(s) remaining. Make the changes and commit to this branch."
           
           echo "✅ Claude triggered for automatic retry"
 
